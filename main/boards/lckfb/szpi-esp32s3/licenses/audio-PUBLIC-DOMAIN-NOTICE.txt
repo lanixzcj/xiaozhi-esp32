@@ -1,0 +1,44 @@
+CAT RECORDING: PUBLIC DOMAIN (PD-SELF)
+
+Title: Meow of a pleading cat
+Author: Heismark
+Source: https://commons.wikimedia.org/wiki/File:Meow_of_a_pleading_cat.oga
+Verified revision:
+https://commons.wikimedia.org/w/index.php?title=File:Meow_of_a_pleading_cat.oga&oldid=1038489736
+Release: https://commons.wikimedia.org/wiki/File:Meow_of_a_pleading_cat.oga#Licensing
+
+The copyright holder released the recording worldwide into the public
+domain, with unconditional permission to use it for any purpose where that
+release is not legally possible (PD-self). This is not an MIT license.
+
+Adaptation: excerpt 9.25-11.62 seconds; 60 Hz high-pass, 12 ms fade-in,
+18 ms fade-out, constant gain, mono 24 kHz PCM16, then firmware Opus encoding.
+See assets/audio/recording-provenance.json for exact processing and hashes.
+No endorsement is implied.
+
+DOG, CHICKEN (ADULT HEN), COW, AND SHEEP: CC0 1.0 UNIVERSAL
+
+Dog: "Dog barking mono" by Brandon Morris, uploaded by HaelDB.
+https://opengameart.org/content/dog-barking-mono
+CC0 was selected from the licenses offered on the source page.
+
+Hen: "Hens Lays" by Joseph SARDIN.
+https://bigsoundbank.com/hens-lays-s0978.html
+
+Cow: "Cow Moos #1" by Joseph SARDIN.
+https://bigsoundbank.com/vache-qui-meugle-s0546.html
+
+Sheep: "Sheep Baa" by mikewest (original recording),
+AntumDeluge (edited one-shot).
+https://opengameart.org/content/sheep-baa
+https://freesound.org/people/mikewest/sounds/414342/
+The same real recorded bleat is repeated twice with a 350 ms silent gap.
+It is not an uninterrupted original recording of two calls.
+
+License: https://creativecommons.org/publicdomain/zero/1.0/
+Local full text: audio-CC0-1.0.txt
+
+Exact excerpt boundaries, source URLs, authors, processing, and hashes for
+all six recordings are retained in assets/audio/recording-provenance.json.
+The original creators have not endorsed this firmware. Audio assets remain
+independent of the software's MIT license.

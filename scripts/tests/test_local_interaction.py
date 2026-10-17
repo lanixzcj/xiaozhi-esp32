@@ -352,11 +352,11 @@ class LocalInteractionTests(unittest.TestCase):
                 return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
             }
         '''
-        # Real repository popup and upgrade assets cover accepted vs oversized/long clips.
+        # Real repository popup and 4.37-second registration error cover accepted vs long clips.
         popup = ROOT / "main/assets/common/popup.ogg"
         if not popup.exists():
             popup = next((ROOT / "main/assets").rglob("popup.ogg"))
-        upgrade = ROOT / "main/assets/locales/en-US/upgrade.ogg"
+        upgrade = ROOT / "main/assets/locales/en-US/err_reg.ogg"
         checks = r'''
             int main() {
                 auto clip = Read(POPUP_PATH);

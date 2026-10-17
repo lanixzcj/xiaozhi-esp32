@@ -1,0 +1,85 @@
+[
+  {
+    "animal": "cat",
+    "source_sha256": "835123381887386ee293925e761e91eaacc76bf94dedd544e7e26dd0281f66b9",
+    "rgb565_sha256": "c210407a1cab4e610096f85a135acf60f0c0e4d54e8a235d569d6852d3cd06a1",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": null,
+    "css_object_position": "50% 50%",
+    "css_object_fit": "cover",
+    "license": "CC BY-SA 3.0",
+    "processing": "LANCZOS aspect-preserving cover resize/crop to 296x162; little-endian RGB565. No retouch."
+  },
+  {
+    "animal": "dog",
+    "source_sha256": "6aeca0694def73b18d67098856de2657f3d0d198cb9b010bc0417b6fd6d918ec",
+    "rgb565_sha256": "f87688fa29a9c27c6dfad601df97f948256ccdeaeba5c29c31ac73400b6b86dd",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": null,
+    "css_object_position": "50% 0%",
+    "css_object_fit": "cover",
+    "license": "CC BY 3.0",
+    "processing": "LANCZOS aspect-preserving cover resize/crop to 296x162; little-endian RGB565. No retouch."
+  },
+  {
+    "animal": "duck",
+    "source_sha256": "cc7fe6adc2a05f42020bd1ae916eba726a99a7092829446cc2f97f3f41692ae3",
+    "rgb565_sha256": "d81b30d80eecb3b7fc6952311afe955f444a24e8a92f4fd027a8744a684262b9",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": [
+      0,
+      150,
+      960,
+      905
+    ],
+    "css_object_position": "50% 50%",
+    "css_object_fit": "contain",
+    "license": "CC0 1.0",
+    "processing": "LANCZOS aspect-preserving contain resize/crop to 296x162; little-endian RGB565. No retouch."
+  },
+  {
+    "animal": "chicken",
+    "source_sha256": "6da74abf2ac499e9704e65af486c6c6c615769f82f2fbe5b1abb1d53a7bb0947",
+    "rgb565_sha256": "660e40e04ecdc4cf57337d340a6d3947422baebd17b78f8e0a1d4bb55b94488a",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": null,
+    "css_object_position": "50% 50%",
+    "css_object_fit": "cover",
+    "license": "CC BY 2.5",
+    "processing": "LANCZOS aspect-preserving cover resize/crop to 296x162; little-endian RGB565. No retouch."
+  },
+  {
+    "animal": "cow",
+    "source_sha256": "fe1edcf8789a5349428b0d012953e278a6cc29199b6ea515770342c11176b1d3",
+    "rgb565_sha256": "322faf190088e725e5ed7287026fe50483e0fc5225fa2778ce83c5ec9bcf54a4",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": null,
+    "css_object_position": "50% 50%",
+    "css_object_fit": "cover",
+    "license": "CC BY 4.0",
+    "processing": "LANCZOS aspect-preserving cover resize/crop to 296x162; little-endian RGB565. No retouch."
+  },
+  {
+    "animal": "sheep",
+    "source_sha256": "7123a6fba94b2d000a27671247ce9e99d781c19c814a01c1d28f89a44e93d544",
+    "rgb565_sha256": "0c644709d8ade913e933687e21357e7c13a50d4f868c12a9a9fc4071329136ef",
+    "width": 296,
+    "height": 162,
+    "bytes": 95904,
+    "source_crop": null,
+    "css_object_position": "50% 55%",
+    "css_object_fit": "cover",
+    "license": "CC0 1.0",
+    "processing": "LANCZOS aspect-preserving cover resize/crop to 296x162; little-endian RGB565. No retouch."
+  }
+]

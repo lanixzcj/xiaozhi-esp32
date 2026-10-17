@@ -1,0 +1,34 @@
+DUCK RECORDING AND ADAPTATIONS: CC BY-SA 3.0 UNPORTED
+
+Original title: Anas platyrhynchos - Mallard - XC62258
+Original author / recording credit: Jonathon Jongsma
+Original recording: https://xeno-canto.org/62258
+Source: https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_-_XC62258.ogg
+Verified source revision:
+https://commons.wikimedia.org/w/index.php?title=File:Anas_platyrhynchos_-_Mallard_-_XC62258.ogg&oldid=1272207943
+
+License: Creative Commons Attribution-ShareAlike 3.0 Unported
+License URI: https://creativecommons.org/licenses/by-sa/3.0/
+Full legal terms: https://creativecommons.org/licenses/by-sa/3.0/legalcode
+
+The adapted animal-duck.wav and the corresponding kDuckOgg audio bytes in
+animal_game_sounds.h are provided under that same CC BY-SA 3.0 license.
+These audio files/bytes are not covered by the repository's MIT software
+license. Retain this attribution, license URI, and modification notice when
+redistributing the duck audio, its adaptation, or a firmware containing it.
+
+Changes from the original: excerpt from 0.98 to 2.98 seconds; 60 Hz high-pass;
+12 ms fade-in; 18 ms fade-out; constant gain of -7.44 dB; conversion to mono
+24 kHz PCM16. Firmware encoding adds lossy 24 kbit/s mono Opus compression
+with 60 ms packets. No pitch or time changes and no synthesis. The committed
+WAV is identical to the reviewed recording preview. Source and derivative
+hashes are in assets/audio/recording-provenance.json and
+assets/audio/firmware-encoding-report.json.
+
+No connection with, sponsorship by, or endorsement from Jonathon Jongsma,
+xeno-canto, Wikimedia, or Creative Commons is implied.
+
+The work is offered as-is without warranties. The full license, including
+its disclaimers and limitations of liability, is available at the URI above.
+This notice provides the license URI rather than reproducing the legal code.
+Other separate audio assets retain their own listed public-domain/CC0 status.

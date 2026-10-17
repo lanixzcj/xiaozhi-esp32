@@ -44,8 +44,19 @@ int main() {
     assert(game.phase() == Phase::Rest);
     assert(!game.AcceptTap(4000));
     assert(!game.Tick(1000000, true)); // never restarts itself
-    game.Start(5000); // explicit parent restart
-    assert(game.animal() == 0);
+    game.Start(5000, game.group() + 1); // explicit parent restart advances group
+    assert(game.animal() == 3);
+    assert(game.group() == 1);
+    for (size_t animal = 3; animal != 6; ++animal) {
+        auto time = uint32_t(5000 + (animal - 3) * 4000);
+        assert(game.animal() == animal);
+        assert(game.AcceptTap(time));
+        assert(!game.Tick(time + 2700, false)); // longer recorded sounds stay visible
+        assert(game.Tick(time + 2800, true));
+    }
+    assert(game.phase() == Phase::Rest);
+    game.Start(18000, game.group() + 1);
+    assert(game.animal() == 0 && game.group() == 0);
     assert(game.phase() == Phase::Ready);
     game.Close();
     assert(!game.AcceptTap(5100));
@@ -91,6 +102,28 @@ int main() {
         self.assertNotIn("lv_obj_clean", source)
         self.assertIn("poll_pending_.exchange(true)", source)
 
+    def test_six_group_and_flash_photo_contract(self):
+        import hashlib
+        import json
+        source = (BOARD / "animal_touch_game.cc").read_text()
+        self.assertIn("photo_mode_ = true", (BOARD / "animal_touch_game.h").read_text())
+        self.assertIn("lv_obj_set_style_clip_corner(card_, true", source)
+        self.assertIn("session_.group() + 1", source)
+        toggle = source.split("void AnimalTouchGame::ToggleVisualMode()", 1)[1].split("void AnimalTouchGame::UpdateView", 1)[0]
+        self.assertNotIn("PlayLocal", toggle)
+        self.assertNotIn("session_.Start", toggle)
+        self.assertIn("kParentHoldMs", source)
+        data = json.loads((BOARD / "assets/photos/provenance.json").read_text())
+        self.assertEqual([x["animal"] for x in data], ["cat", "dog", "duck", "chicken", "cow", "sheep"])
+        for item in data:
+            original = BOARD / "assets/photos" / (item["animal"] + ".jpg")
+            self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), item["sha256"])
+            self.assertTrue(item["license_url"].startswith("https://"))
+        report = json.loads((BOARD / "assets/photos/processing.json").read_text())
+        self.assertEqual(len(report), 6)
+        self.assertEqual(sum(x["bytes"] for x in report), 6 * 296 * 162 * 2)
+        self.assertIn("LV_COLOR_FORMAT_RGB565", (BOARD / "animal_game_photos.c").read_text())
+
     def test_offline_font_has_board_lifetime(self):
         source = (BOARD / "animal_touch_game.cc").read_text()
         self.assertIn("LV_FONT_DECLARE(animal_game_font)", source)
@@ -98,7 +131,7 @@ int main() {
         self.assertNotIn("GetTheme", source)
         self.assertIn("&animal_game_font", source)
         font = (BOARD / "animal_game_font.c").read_text()
-        for character in "小猫狗鸭动物返回休息家长再玩":
+        for character in "小猫狗鸭母鸡牛羊照片卡通动物返回休息家长再玩":
             self.assertIn(f"U+{ord(character):04X}", font)
 
 

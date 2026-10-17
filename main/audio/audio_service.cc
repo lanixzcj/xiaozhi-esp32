@@ -859,7 +859,12 @@ void AudioService::SetLocalInteractionActive(bool active) {
 bool AudioService::PlayLocalInteractionSound(std::string_view ogg) {
     // Fixed bounds keep parsing/allocations short and the main task nonblocking.
     constexpr size_t kMaxSoundBytes = 24 * 1024;
-    constexpr int kMaxSoundDurationMs = 1200;
+    constexpr int kMaxSoundDurationMs = 3000;
+    // Local recordings are admitted atomically and exclusively. Keep the
+    // network-stream buffering limit unchanged; the shared fixed queue already
+    // has ten seconds of capacity for microphone-test playback.
+    constexpr size_t kMaxLocalPackets = 50;
+    static_assert(kMaxLocalPackets <= decltype(audio_decode_queue_)::capacity());
     uint32_t generation;
     {
         std::lock_guard<std::mutex> lock(audio_queue_mutex_);
@@ -870,7 +875,7 @@ bool AudioService::PlayLocalInteractionSound(std::string_view ogg) {
         generation = playback_generation_;
     }
 
-    FixedQueue<std::unique_ptr<AudioStreamPacket>, MAX_DECODE_PACKETS_IN_QUEUE> packets;
+    FixedQueue<std::unique_ptr<AudioStreamPacket>, kMaxLocalPackets> packets;
     int duration_ms = 0;
     bool too_long = false;
     auto demuxer = std::make_unique<OggDemuxer>();

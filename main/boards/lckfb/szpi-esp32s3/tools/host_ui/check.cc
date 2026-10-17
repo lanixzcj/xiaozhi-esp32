@@ -50,12 +50,30 @@ int main(int argc, char** argv) {
     assert(game.IsVisible());
     assert(lv_screen_active() == chat);
     auto card = lv_obj_get_child(panel, 2);
-    auto rest = lv_obj_get_child(panel, 4);
+    auto photo = lv_obj_get_child(card, 0);
+    auto mode = lv_obj_get_child(panel, 4);
+    auto rest = lv_obj_get_child(panel, 5);
     auto restart = lv_obj_get_child(rest, 2);
     auto& app = Application::GetInstance();
-    const char* names[] = {"cat", "dog", "duck"};
-    for (int i = 0; i < 3; i++) {
+    const char* names[] = {"cat", "dog", "duck", "chicken", "cow", "sheep"};
+    auto hold = [](lv_obj_t* button, unsigned duration) {
+        lv_obj_send_event(button, LV_EVENT_PRESSED, nullptr);
+        Advance(duration);
+        lv_obj_send_event(button, LV_EVENT_RELEASED, nullptr);
+    };
+    assert(!lv_obj_has_flag(photo, LV_OBJ_FLAG_HIDDEN));  // photos default
+    hold(mode, 1400);
+    assert(!lv_obj_has_flag(photo, LV_OBJ_FLAG_HIDDEN));
+    for (int i = 0; i < 6; i++) {
         Snapshot(names[i]);
+        hold(mode, 1500);
+        assert(lv_obj_has_flag(photo, LV_OBJ_FLAG_HIDDEN));
+        char cartoon[64];
+        snprintf(cartoon, sizeof(cartoon), "%s-cartoon", names[i]);
+        Snapshot(cartoon);
+        hold(mode, 1500);
+        assert(!lv_obj_has_flag(photo, LV_OBJ_FLAG_HIDDEN));
+        assert(app.sounds == i);  // changing display mode never plays
         lv_obj_send_event(card, LV_EVENT_PRESSED, nullptr);
         lv_obj_send_event(card, LV_EVENT_LONG_PRESSED_REPEAT, nullptr);
         assert(app.sounds == i);  // hold/repeat never play
@@ -64,31 +82,96 @@ int main(int argc, char** argv) {
         for (int n = 0; n < 10; n++)
             lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);
         assert(app.sounds == i + 1);
-        Advance(1000);
-        assert(app.sounds == i + 1);  // busy can't advance
+        Advance(2700);
+        assert(app.sounds == i + 1);  // busy can't advance or replay
         app.audio.busy = false;
         Advance(100);
+        if (i == 2 || i == 5) {
+            assert(!lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
+            Snapshot(i == 2 ? "rest-first-group" : "rest");
+            Advance(100000);
+            assert(app.sounds == i + 1);
+            hold(restart, 1400);
+            assert(!lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
+            hold(restart, 1500);
+            assert(lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
+        }
     }
-    assert(!lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
-    Snapshot("rest");
-    Advance(100000);
-    assert(app.sounds == 3);
-    lv_obj_send_event(restart, LV_EVENT_PRESSED, nullptr);
-    Advance(1400);
-    lv_obj_send_event(restart, LV_EVENT_RELEASED, nullptr);
-    assert(!lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
-    lv_obj_send_event(restart, LV_EVENT_PRESSED, nullptr);
-    Advance(1500);
-    lv_obj_send_event(restart, LV_EVENT_RELEASED, nullptr);
-    assert(lv_obj_has_flag(rest, LV_OBJ_FLAG_HIDDEN));
+    // Restart cycles deterministically back to the first group.
+    assert(std::string(lv_label_get_text(lv_obj_get_child(panel, 0))) == "小猫");
     game.RequestExit();
     assert(!game.IsVisible());
     assert(lv_screen_active() == chat);
     assert(!app.active);
-    for (int n = 0; n < 30; n++) {
+    // All six descriptors and drawing paths have been warmed above. Mode/resource
+    // changes and repeated entry/exit must not grow the LVGL heap or object tree.
+    lv_mem_monitor_t before{}, after{};
+    lv_mem_monitor(&before);
+    for (int n = 0; n < 300; n++) {
         lv_obj_send_event(entry, LV_EVENT_SHORT_CLICKED, nullptr);
+        for (int animal = 0; animal < 6; ++animal) {
+            hold(mode, 1500);
+            hold(mode, 1500);
+            lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);
+            app.audio.busy = false;
+            Advance(2800);
+            if (animal == 2)
+                hold(restart, 1500);
+        }
+        lv_obj_invalidate(chat);  // unrelated screen/resource repaint
+        Advance(100);
         game.RequestExit();
+        Advance(100);
     }
+    lv_mem_monitor(&after);
+    assert(after.free_size >= before.free_size);
+    assert(lv_mem_test() == LV_RESULT_OK);
     assert(lv_obj_get_child_count(layer) == 2);
-    puts("LVGL UI checks passed");
+    assert(lv_obj_get_child_count(panel) == 6);
+    assert(lv_screen_active() == chat);
+    // Main-task queue coalescing and a stale callback after exit.
+    app.deferred = true;
+    lv_obj_send_event(entry, LV_EVENT_SHORT_CLICKED, nullptr);
+    assert(!game.IsVisible());
+    app.Flush();
+    assert(game.IsVisible());
+    auto sounds_before = app.sounds;
+    for (int i = 0; i < 1000; ++i)
+        lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);
+    assert(app.pending.size() == 1);
+    app.Flush();
+    assert(app.sounds == sounds_before + 1);
+    // Regression: Poll is queued while the cat is busy, then the child taps
+    // that still-listening card, then audio drains before the main queue runs.
+    // The busy tap must never turn into a new-animal tap after Poll advances.
+    Advance(2800);
+    lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);
+    assert(app.pending.size() == 1);  // only Poll; the busy tap was discarded
+    app.audio.busy = false;
+    app.Flush();
+    assert(app.sounds == sounds_before + 1);
+    assert(std::string(lv_label_get_text(lv_obj_get_child(panel, 0))) == "小狗");
+    lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);  // genuinely fresh tap
+    app.Flush();
+    assert(app.sounds == sounds_before + 2);
+    for (int i = 0; i < 100; ++i)
+        Advance(100);
+    assert(app.pending.size() == 1);
+    app.audio.busy = false;
+    app.Flush();  // third animal is Ready
+    game.RequestExit();
+    lv_obj_send_event(entry, LV_EVENT_SHORT_CLICKED, nullptr);  // a later reopen
+    lv_obj_send_event(card, LV_EVENT_SHORT_CLICKED, nullptr);   // captures old session
+    app.Flush();
+    assert(game.IsVisible() && app.active && app.sounds == sounds_before + 2);
+    assert(std::string(lv_label_get_text(lv_obj_get_child(panel, 0))) == "小猫");
+    game.RequestExit();
+    app.Flush();
+    assert(!game.IsVisible() && !app.active);
+    app.deferred = false;
+    printf(
+        "LVGL UI checks passed: six photos/cartoons, two three-round groups, 300 cycles, deferred "
+        "queue guards, free %zu "
+        "-> %zu bytes\n",
+        before.free_size, after.free_size);
 }

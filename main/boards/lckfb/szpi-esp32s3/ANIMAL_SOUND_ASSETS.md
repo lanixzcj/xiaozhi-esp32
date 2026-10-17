@@ -1,95 +1,157 @@
-# Offline animal sound assets
+# Offline recorded animal sounds
 
-`animal_game_sounds.h` contains three short, original synthesized animal-like
-calls, in the same order as the game's animals:
+The six sounds in `animal_game_sounds.h` come from real animal recordings.
+Their source WAVs are committed in `assets/audio/` and are byte-for-byte
+identical to the six approved, extended preview WAVs. The generator encodes
+those files locally without downloading, synthesizing, trimming, normalizing,
+changing pitch, or changing speed.
 
-| Index | Cue | Embedded bytes | Source duration | Firmware playback duration |
-| --- | --- | ---: | ---: | ---: |
-| 0 | Cat, one gentle meow | 2,320 | 0.66 s | 0.72 s |
-| 1 | Dog, one soft woof | 1,596 | 0.42 s | 0.48 s |
-| 2 | Duck, one rounded quack | 1,596 | 0.42 s | 0.48 s |
+| Index | Animal | Embedded bytes | Source WAV duration | Packets | Firmware playback |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 0 | Cat | 7,997 | 2.370000 s | 40 | 2.40 s |
+| 1 | Dog | 6,997 | 2.038583 s | 35 | 2.10 s |
+| 2 | Duck | 7,046 | 2.000000 s | 34 | 2.04 s |
+| 3 | Chicken (adult hen) | 8,849 | 2.650000 s | 45 | 2.70 s |
+| 4 | Cow | 8,134 | 2.400000 s | 41 | 2.46 s |
+| 5 | Sheep | 7,255 | 2.094833 s | 36 | 2.16 s |
 
-Total encoded sound data: **5,512 bytes**. No recordings, downloaded samples,
-third-party sound libraries, external generation services, or runtime network
-requests are used. The cues are playful synthetic approximations of animals,
-not recordings of actual animals.
+Total embedded sound data, including attribution metadata: **46,278 bytes**.
+The separate WAVs are build inputs, not duplicate firmware data. The game uses
+the fixed groups cat/dog/duck and hen/cow/sheep.
 
-## Provenance and license
+The sheep clip repeats the **same 0.8724-second real recorded bleat twice**,
+with a **350 ms silent gap**. It is not an uninterrupted original recording
+of two calls. The other five WAVs preserve one continuous source excerpt.
+The chicken sound is an adult hen, not a chick or rooster.
 
-All waveforms were generated specifically for this project by
-`tools/generate_animal_sounds.py`. It combines voiced sine harmonics, moving
-formants, and seeded low-pass noise. Every clip contains a single call, a smooth
-attack and release, and a silent lead-in/tail. Source peaks are normalized to
-0.19 full scale (approximately -14.4 dBFS).
+## Recording credits and separate licenses
 
-The generator, generated header, and original synthesized waveforms are
-distributed under this repository's MIT license; see the root `LICENSE`.
-FFmpeg/libopus are local encoding tools, not sources of recorded sound.
+The repository's MIT software license does **not** replace these recordings'
+licenses. The generator and C++ wrapper code are MIT licensed. Each audio
+payload retains the license listed below. The duck WAV and embedded Opus
+adaptation remain **CC BY-SA 3.0 Unported**.
 
-## Playback API and format
+| Audio | Original title and creator | Source | License |
+| --- | --- | --- | --- |
+| Cat | *Meow of a pleading cat*, Heismark | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Meow_of_a_pleading_cat.oga) | [Public domain, PD-self](https://commons.wikimedia.org/wiki/File:Meow_of_a_pleading_cat.oga#Licensing) |
+| Dog | *Dog barking mono*, Brandon Morris; uploaded by HaelDB | [OpenGameArt](https://opengameart.org/content/dog-barking-mono) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) selected from the offered licenses |
+| Duck | *Anas platyrhynchos - Mallard - XC62258*, Jonathon Jongsma | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_-_XC62258.ogg), [original XC62258](https://xeno-canto.org/62258) | [CC BY-SA 3.0 Unported](https://creativecommons.org/licenses/by-sa/3.0/) |
+| Adult hen | *Hens Lays*, Joseph SARDIN | [BigSoundBank](https://bigsoundbank.com/hens-lays-s0978.html) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| Cow | *Cow Moos #1*, Joseph SARDIN | [BigSoundBank](https://bigsoundbank.com/vache-qui-meugle-s0546.html) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| Sheep | *Sheep Baa*, mikewest (original recording); AntumDeluge (edited one-shot) | [OpenGameArt](https://opengameart.org/content/sheep-baa), [original Freesound recording](https://freesound.org/people/mikewest/sounds/414342/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 
-- `animal_game_assets::kSoundCount` is 3.
-- `animal_game_assets::GetSound(index)` returns a `std::string_view` over
-  flash-resident Ogg bytes. An out-of-range index returns an empty view.
-- Encoding: mono Ogg Opus, 16,000 Hz source/`OpusHead` input rate, 24 kbit/s CBR,
-  60 ms packets. Each encoded audio packet is 180 bytes, below the demuxer's
-  2,048-byte packet limit.
-- Cat has 12 packets; dog and duck have 8 packets each. The packet count includes
-  encoder delay and final padding. The firmware demuxer does not trim Ogg
-  pre-skip or the last granule, so the table reports its full decoded duration.
-- Standard Opus container timestamps use 48 kHz; `ffprobe` therefore reports
-  48 kHz for the stream. The firmware reads the 16 kHz input rate from `OpusHead`
-  and decodes at 16 kHz before its normal output resampling.
+Source verification dates, original download URLs and hashes, exact WAV hashes,
+recording evidence, and adaptation details are preserved verbatim in
+`assets/audio/recording-provenance.json`. Its historical `opus_sha256` fields
+refer to the earlier browser-preview encoding, **not** this firmware encoding.
+The authoritative firmware hashes and measured output are in
+`assets/audio/firmware-encoding-report.json`.
 
-## Reproduce or verify
+The already-prepared WAVs use a 60 Hz high-pass, 12 ms fade-in, 18 ms fade-out,
+constant gain, and mono 24 kHz PCM16. Excerpt ranges are cat 9.25–11.62 s, dog
+0–2.038594 s, duck 0.98–2.98 s, hen 11.45–14.10 s, and cow 2.90–5.30 s. Sheep
+uses the complete edited one-shot twice with the stated gap. Firmware encoding
+adds lossy Opus compression and container/codec padding only.
 
-From the repository root:
+In particular, the duck adaptation is based on Jonathon Jongsma's XC62258:
+excerpt 0.98–2.98 s, high-pass, fades, -7.44 dB constant gain, mono/resampling,
+and Opus encoding. It is offered under the same CC BY-SA 3.0 license. The
+original creators have not endorsed this firmware.
+
+Ship this document and the following notices with firmware distributions:
+
+- `licenses/audio-CC-BY-SA-3.0-NOTICE.txt`: duck attribution, license URI,
+  modification notice, and link to the complete legal terms
+- `licenses/audio-PUBLIC-DOMAIN-NOTICE.txt`: public-domain/CC0 credits and sources
+- `licenses/audio-CC0-1.0.txt`: complete CC0 legal text
+
+Each Ogg stream also carries its title, author, source and license in OpusTags.
+The duck tags additionally retain the original source, excerpt, changes and
+share-alike notice. Do not label these recordings collectively as MIT or
+remove their credit/license information when distributing embedded versions.
+
+## Playback API and bounded format
+
+- `animal_game_assets::kSoundCount` is 6.
+- `GetSound(index)` returns a `std::string_view` over flash-resident Ogg data;
+  an out-of-range index returns an empty view.
+- Mono Ogg Opus, **24,000 Hz** source and `OpusHead` input rate, 24 kbit/s CBR,
+  **60 ms** audio packets. Each audio packet is **180 bytes**. The largest
+  OpusTags packet is **761 bytes**. Both fit the demuxer's 2,048-byte buffer.
+- Ogg/Opus granules use 48 kHz units. `ffprobe` therefore reports a 48 kHz
+  stream, while the firmware reads 24 kHz from `OpusHead`, configures the
+  decoder accordingly, and uses its existing output resampler when needed.
+- The firmware demuxer does not trim the 6.5 ms codec pre-skip or last-packet
+  padding. The table reports the full untrimmed playback durations. All
+  approved source samples are retained. The longest cue is 2.70 seconds.
+- Local playback admission allows at most 24 KiB, 50 packets, and 3,000 ms.
+  Clips are admitted atomically only into an idle local-interaction playback
+  pipeline. Oversized, too-long, malformed, truncated, or busy requests are
+  rejected rather than played partially. Network buffering limits are separate.
+
+## Offline reproduction and validation
+
+Requirements: Python 3 standard library, FFmpeg with libopus, and ffprobe.
+No Python packages or network access are needed. From the repository root:
 
 ```sh
 python3 main/boards/lckfb/szpi-esp32s3/tools/generate_animal_sounds.py
 python3 main/boards/lckfb/szpi-esp32s3/tools/generate_animal_sounds.py --check
+python3 -m unittest discover -s scripts/tests -p test_animal_recordings.py -v
 ```
 
-Requirements: Python 3 standard library, `ffmpeg` with `libopus`, and `ffprobe`.
-No Python packages or network access are needed. A fixed noise seed and FFmpeg
-bit-exact flags make repeated runs byte-identical with the same toolchain.
-The checked-in assets were generated with Python 3.12.14, FFmpeg
-7.1.5-0+deb13u1, and libopus 1.5.2. Other encoder versions may legitimately
-produce different bytes and should be revalidated before committing.
+`--check` validates approved input hashes and exact PCM frame counts, regenerates
+all six encodings, and compares the complete generated header without modifying
+it. Validation includes Ogg checksums, page sequencing, continuation, end marker,
+mono/rate headers, 60 ms packet durations, every packet's buffer limit, source
+length encoded in the final granule, complete FFmpeg decoding, exact decoded
+frame count, padded playback length, and decoded peak at most 0.56 full scale.
+That peak limit permits Opus overshoot above the supplied dog's -6 dBTP source;
+it is not a volume normalization operation.
 
-To retain WAV/OGG files for listening without adding them to the firmware:
+To retain exact WAV copies and encoded previews outside the repository:
 
 ```sh
 python3 main/boards/lckfb/szpi-esp32s3/tools/generate_animal_sounds.py \
   --check --preview-dir /tmp/animal-game-audio-preview
 ```
 
-The script verifies mono and input-rate headers, 60 ms packet durations,
-packet sizes, padded playback duration, successful FFmpeg decoding, and a
-decoded peak below 0.23 full scale. It prints sizes, durations, peaks, RMS
-levels, and SHA-256 hashes. `--check` compares the complete generated header
-with the checked-in file without overwriting it.
+The committed output was generated with Python 3.12.14, FFmpeg
+7.1.5-0+deb13u1, and libopus 1.5.2. Repeated runs with this toolchain produce
+byte-identical output. Other encoder versions can change the output; inspect
+and revalidate those changes rather than bypassing `--check`.
 
-## Validation results
+## Verified results
 
-Repeated generation matched byte-for-byte. `ffprobe` identified all three as
-mono Opus; container durations were 0.6665 s, 0.4265 s, and 0.4265 s. FFmpeg
-decoded all clips without errors. Its decoded peak/RMS levels were:
+All six WAV hashes match the supplied approved preview. Repeated generation
+and `--check` match the committed header and encoding report exactly. FFmpeg
+decodes the exact source frame counts, including all 63,600 frames of the hen
+and both sheep calls with their original gap.
 
-| Cue | Peak | RMS |
-| --- | ---: | ---: |
-| Cat | -14.22 dBFS | -20.80 dBFS |
-| Dog | -14.45 dBFS | -26.23 dBFS |
-| Duck | -14.45 dBFS | -25.13 dBFS |
+| Cue | FFmpeg decoded peak | FFmpeg RMS | Firmware-style libopus peak |
+| --- | ---: | ---: | ---: |
+| Cat | -10.93 dBFS | -26.47 dBFS | -10.94 dBFS |
+| Dog | -5.70 dBFS | -26.02 dBFS | -5.70 dBFS |
+| Duck | -11.31 dBFS | -28.15 dBFS | -11.74 dBFS |
+| Hen | -12.83 dBFS | -31.86 dBFS | -12.59 dBFS |
+| Cow | -11.24 dBFS | -25.42 dBFS | -11.24 dBFS |
+| Sheep | -7.53 dBFS | -27.16 dBFS | -7.54 dBFS |
 
-A host C++17 test compiled the header and the actual
-`main/audio/demuxer/ogg_demuxer.cc`, replacing only ESP logging with no-op
-macros. It parsed the assets both whole and in 1-byte/17-byte chunks, verified
-`Finish()`, and decoded every packet using libopus at 16 kHz mono. All packets
-produced 960 PCM samples (60 ms), with untrimmed peaks no higher than
--14.21 dBFS. Out-of-range API indexes returned empty views.
+The new host tests compile the actual `main/audio/demuxer/ogg_demuxer.cc` and
+extract the actual `AudioService::PlayLocalInteractionSound` admission method;
+only ESP platform primitives are stubbed. All six embedded streams are parsed
+whole and in 1-byte/17-byte chunks, with `Finish()` verified. The host libopus
+decoder produces exactly 1,440 mono PCM samples per packet at 24 kHz, including
+the complete untrimmed 64,800-frame hen stream. Source hashes, sheep repetition
+and exact 8,400-frame silent gap, embedded duck credits, out-of-range indexes,
+reproducibility, and damaged-file rejection are covered.
 
-These host checks do not replace testing the ESP decoder, output resampler,
-speaker, or perceived sound on the actual board. Verify each animal's cue and
-set a comfortable speaker volume before child use. Digital headroom alone
-does not establish a safe acoustic sound level.
+Admission tests verify all six clips, exact 50-packet/3,000 ms acceptance,
+3,060 ms rejection, 51 short packets rejected independently of duration,
+rejection while decode/output is busy, no duplicate/queued tap, malformed or
+truncated streams, and no partial enqueue on failure.
+
+These host tests do not run the ESP hardware decoder or validate the actual
+speaker, output resampler, stopping latency, or subjective listening quality.
+Audition all six on the board at a comfortable low volume before child use.
+Digital headroom alone does not establish a safe acoustic sound level.

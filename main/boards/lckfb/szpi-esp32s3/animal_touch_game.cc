@@ -2,6 +2,8 @@
 
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 
+#include "animal_game_cartoons.h"
+#include "animal_game_photos.h"
 #include "animal_game_sounds.h"
 #include "application.h"
 
@@ -11,7 +13,7 @@ namespace {
 constexpr uint32_t kInk = 0x41382F;
 constexpr uint32_t kPaper = 0xFFF8EA;
 constexpr uint32_t kCard = 0xF4E9D4;
-constexpr const char* kNames[] = {"小猫", "小狗", "小鸭"};
+constexpr const char* kNames[] = {"小猫", "小狗", "小鸭", "母鸡", "小牛", "小羊"};
 static_assert(animal_game_assets::kSoundCount == AnimalGameSession::kAnimalCount);
 
 lv_obj_t* Box(lv_obj_t* parent, int x, int y, int width, int height, uint32_t color,
@@ -99,7 +101,7 @@ void AnimalTouchGame::Initialize() {
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_text_font(panel_, &animal_game_font, 0);
-    title_ = Label(panel_, "小猫", 12, 10, 210);
+    title_ = Label(panel_, "小猫", 12, 10, 138);
     auto back = Button(panel_, "返回", 240, 4, 72, 38);
     lv_obj_add_event_cb(
         back,
@@ -115,15 +117,58 @@ void AnimalTouchGame::Initialize() {
         card_,
         [](lv_event_t* event) {
             auto self = static_cast<AnimalTouchGame*>(lv_event_get_user_data(event));
+            // LVGL holds the display lock here. Decide against the screen the
+            // user actually touched, before a queued Poll can advance it.
+            if (!self->visible_.load() || !self->session_.CanTap(lv_tick_get())) {
+                return;
+            }
+            const auto generation = self->session_generation_;
+            const auto animal = self->session_.animal();
             if (!self->tap_pending_.exchange(true)) {
-                Application::GetInstance().Schedule([self]() {
-                    self->Tap();
+                Application::GetInstance().Schedule([self, generation, animal]() {
+                    self->Tap(generation, animal);
                     self->tap_pending_.store(false);
                 });
             }
         },
         LV_EVENT_SHORT_CLICKED, this);
+    // The uncompressed RGB565 pixels and descriptors live in flash. Switching
+    // animals never allocates JPEG decoders, downloads files, or changes fonts.
+    lv_obj_set_style_clip_corner(card_, true, 0);
+    photo_ = lv_image_create(card_);
+    lv_obj_set_pos(photo_, 0, 0);
+    lv_obj_remove_flag(photo_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(photo_, LV_OBJ_FLAG_SCROLLABLE);
     hint_ = Label(panel_, "轻轻点一下", 12, 212, 296);
+
+    mode_ = Button(panel_, "照片", 158, 4, 72, 38);
+    lv_obj_add_event_cb(
+        mode_,
+        [](lv_event_t* event) {
+            auto self = static_cast<AnimalTouchGame*>(lv_event_get_user_data(event));
+            switch (lv_event_get_code(event)) {
+                case LV_EVENT_PRESSED:
+                    self->mode_pressed_ = true;
+                    self->mode_pressed_at_ = lv_tick_get();
+                    break;
+                case LV_EVENT_PRESS_LOST:
+                    self->mode_pressed_ = false;
+                    break;
+                case LV_EVENT_RELEASED: {
+                    bool toggle =
+                        self->mode_pressed_ && uint32_t(lv_tick_get() - self->mode_pressed_at_) >=
+                                                   AnimalGameSession::kParentHoldMs;
+                    self->mode_pressed_ = false;
+                    if (toggle) {
+                        Application::GetInstance().Schedule([self]() { self->ToggleVisualMode(); });
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        },
+        LV_EVENT_ALL, this);
 
     rest_ = Box(panel_, 0, 46, 320, 194, kPaper);
     lv_obj_add_flag(rest_, LV_OBJ_FLAG_HIDDEN);
@@ -186,8 +231,10 @@ void AnimalTouchGame::Enter() {
         app.EndLocalInteraction();
         return;
     }
+    ++session_generation_;
     session_.Start(lv_tick_get());
     restart_pressed_ = false;
+    mode_pressed_ = false;
     visible_.store(true);
     lv_obj_add_flag(entry_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(panel_, LV_OBJ_FLAG_HIDDEN);
@@ -204,17 +251,20 @@ void AnimalTouchGame::Exit() {
     if (!lock || !visible_.load()) {
         return;
     }
+    ++session_generation_;
     session_.Close();
     restart_pressed_ = false;
+    mode_pressed_ = false;
     visible_.store(false);
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(entry_, LV_OBJ_FLAG_HIDDEN);
     Application::GetInstance().EndLocalInteraction();
 }
 
-void AnimalTouchGame::Tap() {
+void AnimalTouchGame::Tap(uint32_t generation, size_t animal) {
     DisplayLockGuard lock(display_);
-    if (!lock || !visible_.load()) {
+    if (!lock || !visible_.load() || generation != session_generation_ ||
+        animal != session_.animal()) {
         return;
     }
     const auto now = lv_tick_get();
@@ -248,11 +298,22 @@ void AnimalTouchGame::Restart() {
         !Application::GetInstance().IsLocalInteractionActive()) {
         return;
     }
-    session_.Start(lv_tick_get());
+    ++session_generation_;
+    session_.Start(lv_tick_get(), (session_.group() + 1) % AnimalGameSession::kGroupCount);
     UpdateView();
 }
 
+void AnimalTouchGame::ToggleVisualMode() {
+    DisplayLockGuard lock(display_);
+    if (!lock || !visible_.load()) {
+        return;
+    }
+    photo_mode_ = !photo_mode_;
+    UpdateView();  // Display-only: no audio, session reset, or persistence write.
+}
+
 void AnimalTouchGame::UpdateView() {
+    lv_label_set_text(lv_obj_get_child(mode_, 0), photo_mode_ ? "照片" : "卡通");
     bool rest = session_.phase() == AnimalGameSession::Phase::Rest;
     if (rest) {
         lv_obj_remove_flag(rest_, LV_OBJ_FLAG_HIDDEN);
@@ -267,12 +328,21 @@ void AnimalTouchGame::UpdateView() {
         lv_label_set_text(hint_, session_.phase() == AnimalGameSession::Phase::Feedback
                                      ? "听一听…"
                                      : "轻轻点一下");
+        if (photo_mode_) {
+            lv_image_set_src(photo_, animal_game_photo(session_.animal()));
+            lv_obj_remove_flag(photo_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(photo_, LV_OBJ_FLAG_HIDDEN);
+        }
         lv_obj_invalidate(card_);
     }
 }
 
 void AnimalTouchGame::DrawAnimal(lv_event_t* event) {
     auto self = static_cast<AnimalTouchGame*>(lv_event_get_user_data(event));
+    if (self->photo_mode_) {
+        return;
+    }
     auto layer = lv_event_get_layer(event);
     lv_area_t bounds;
     lv_obj_get_coords(self->card_, &bounds);
@@ -306,7 +376,7 @@ void AnimalTouchGame::DrawAnimal(lv_event_t* event) {
         Rect(layer, x + 77, y + 92, 27, 18, kInk, 9);
         Rect(layer, x + 88, y + 109, 4, 16, kInk, 2);
         Rect(layer, x + 81, y + 123, 18, 15, 0xD69992, 7);
-    } else {
+    } else if (animal == 2) {
         Rect(layer, x + 21, y + 69, 132, 75, 0xEDC866, 37);
         Rect(layer, x + 80, y + 18, 80, 87, 0xF1D477, 39);
         Triangle(layer, x + 35, y + 82, x + 5, y + 61, x + 22, y + 112, 0xEDC866);
@@ -314,6 +384,8 @@ void AnimalTouchGame::DrawAnimal(lv_event_t* event) {
         Rect(layer, x + 126, y + 46, 10, 14, kInk);
         Rect(layer, x + 139, y + 69, 38, 22, 0xD78B50, 10);
         Rect(layer, x + 145, y + 79, 27, 3, 0x9A653F, 1);
+    } else {
+        animal_game_art::DrawFarmAnimal(layer, bounds.x1, bounds.y1, animal);
     }
 }
 

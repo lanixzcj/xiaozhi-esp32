@@ -25,6 +25,8 @@ private:
     lv_obj_t* entry_ = nullptr;
     lv_obj_t* panel_ = nullptr;
     lv_obj_t* card_ = nullptr;
+    lv_obj_t* photo_ = nullptr;
+    lv_obj_t* mode_ = nullptr;
     lv_obj_t* title_ = nullptr;
     lv_obj_t* hint_ = nullptr;
     lv_obj_t* rest_ = nullptr;
@@ -36,12 +38,17 @@ private:
     std::atomic<bool> tap_pending_{false};
     uint32_t restart_pressed_at_ = 0;
     bool restart_pressed_ = false;
+    uint32_t mode_pressed_at_ = 0;
+    bool mode_pressed_ = false;
+    bool photo_mode_ = true;
+    uint32_t session_generation_ = 0;
 
     void Enter();
     void Exit();
-    void Tap();
+    void Tap(uint32_t generation, size_t animal);
     void Poll();
     void Restart();
+    void ToggleVisualMode();
     void UpdateView();  // Caller holds the LVGL/display lock.
     static void DrawAnimal(lv_event_t* event);
 };

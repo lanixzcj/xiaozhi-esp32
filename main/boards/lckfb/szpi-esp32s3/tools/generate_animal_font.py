@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-TEXT = "小猫小狗小鸭动物朋友返回轻轻点一下听一听…休息一下吧和爸爸妈妈说说小动物家长长按再玩"
+TEXT = "小猫小狗小鸭母鸡小牛小羊照片卡通动物朋友返回轻轻点一下听一听…休息一下吧和爸爸妈妈说说小动物家长长按再玩"
 BOARD = Path(__file__).resolve().parents[1]
 
 
