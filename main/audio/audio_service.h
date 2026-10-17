@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <string_view>
 
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -145,6 +146,11 @@ public:
     bool PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait = false);
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
     void PlaySound(const std::string_view& sound);
+    // Main-task exclusive playback: suspends capture and rejects ordinary/remote audio.
+    // Releasing does not restart capture. Application restores the safe runtime state.
+    void SetLocalInteractionActive(bool active);
+    // Accept a complete short Ogg only when playback is drained; never waits or queues taps.
+    bool PlayLocalInteractionSound(std::string_view sound);
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
     void ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);
@@ -195,6 +201,8 @@ private:
     bool output_in_flight_ = false;
     bool playback_drained_notified_ = true;
     uint32_t playback_generation_ = 0;
+    uint32_t input_generation_ = 0;
+    std::atomic<bool> local_interaction_active_{false};
     // For server AEC
     FixedQueue<uint32_t, MAX_TIMESTAMPS_IN_QUEUE> timestamp_queue_;
 

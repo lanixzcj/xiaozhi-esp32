@@ -1,14 +1,15 @@
-#include "wifi_board.h"
-#include "codecs/box_audio_codec.h"
-#include "display/lcd_display.h"
-#include "display/emote_display.h"
+#include "animal_touch_game.h"
 #include "application.h"
 #include "button.h"
+#include "codecs/box_audio_codec.h"
 #include "config.h"
-#include "i2c_device.h"
+#include "display/emote_display.h"
+#include "display/lcd_display.h"
 #include "esp32_camera.h"
+#include "i2c_device.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#include "wifi_board.h"
 
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
@@ -68,6 +69,9 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+    AnimalTouchGame* animal_game_ = nullptr;
+#endif
 
     void InitializeI2c() {
         // Initialize I2C peripheral
@@ -103,6 +107,12 @@ private:
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (animal_game_ && animal_game_->IsVisible()) {
+                animal_game_->RequestExit();
+                return;
+            }
+#endif
             // During startup (before connected), pressing BOOT button enters Wi-Fi config mode without reboot
             if (app.GetDeviceState() == kDeviceStateStarting) {
                 EnterWifiConfigMode();
@@ -115,11 +125,21 @@ private:
         });
 
         boot_button_.OnPressDown([this]() {
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (animal_game_ && animal_game_->IsVisible()) {
+                return;
+            }
+#endif
             if (press_to_talk_tool_ && press_to_talk_tool_->IsPressToTalkEnabled()) {
                 Application::GetInstance().StartListening();
             }
         });
         boot_button_.OnPressUp([this]() {
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (animal_game_ && animal_game_->IsVisible()) {
+                return;
+            }
+#endif
             if (press_to_talk_tool_ && press_to_talk_tool_->IsPressToTalkEnabled()) {
                 Application::GetInstance().StopListening();
             }
@@ -127,6 +147,11 @@ private:
 
 #if CONFIG_USE_DEVICE_AEC
         boot_button_.OnDoubleClick([this]() {
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (animal_game_ && animal_game_->IsVisible()) {
+                return;
+            }
+#endif
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateIdle) {
                 app.SetAecMode(app.GetAecMode() == kAecOff ? kAecOnDeviceSide : kAecOff);
@@ -223,7 +248,16 @@ private:
         };
 
         if(touch_cfg.disp) {
-            lvgl_port_add_touch(&touch_cfg);
+            auto touch_input = lvgl_port_add_touch(&touch_cfg);
+#ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (touch_input) {
+                animal_game_ = new AnimalTouchGame(display_);
+                // Run after Application has initialized display, audio and callbacks.
+                Application::GetInstance().Schedule([this]() { animal_game_->Initialize(); });
+            }
+#else
+            (void)touch_input;
+#endif
         } else {
             ESP_LOGE(TAG, "Touch display is not initialized");
         }

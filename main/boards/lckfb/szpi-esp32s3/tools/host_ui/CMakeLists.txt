@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.16)
+project(animal_ui_check C CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+# Build against the same LVGL release as the firmware. App/audio stubs below
+# isolate UI behavior; they do not validate the embedded audio or application.
+set(LVGL_SOURCE_DIR "" CACHE PATH "Path to a checkout of LVGL v9.5.0")
+if(NOT EXISTS "${LVGL_SOURCE_DIR}/lvgl.h")
+    message(FATAL_ERROR "Pass -DLVGL_SOURCE_DIR=/path/to/lvgl-v9.5.0")
+endif()
+set(LV_BUILD_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h" CACHE STRING "" FORCE)
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
+add_subdirectory("${LVGL_SOURCE_DIR}" lvgl-build)
+get_filename_component(BOARD "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+add_executable(check check.cc "${BOARD}/animal_touch_game.cc" "${BOARD}/animal_game_font.c")
+target_include_directories(check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/stubs" "${BOARD}")
+target_compile_options(check PRIVATE -UNDEBUG)
+target_link_libraries(check lvgl m)

@@ -61,7 +61,14 @@ Application::~Application() {
     vEventGroupDelete(event_group_);
 }
 
-bool Application::SetDeviceState(DeviceState state) { return state_machine_.TransitionTo(state); }
+bool Application::SetDeviceState(DeviceState state) {
+    if (IsLocalInteractionActive() &&
+        (state == kDeviceStateConnecting || state == kDeviceStateListening ||
+         state == kDeviceStateSpeaking || state == kDeviceStateNotifying)) {
+        return false;
+    }
+    return state_machine_.TransitionTo(state);
+}
 
 void Application::Initialize() {
     auto& board = Board::GetInstance();
@@ -113,6 +120,22 @@ void Application::Initialize() {
 
     // Set network event callback for UI updates and network state handling
     board.SetNetworkEventCallback([this](NetworkEvent event, const std::string& data) {
+        // Event bits coalesce and cannot preserve Connected/Disconnected order.
+        // Keep the latest callback state for deferred activation after local play.
+        if (event == NetworkEvent::Connected) {
+            network_connected_.store(true);
+        } else if (event == NetworkEvent::Disconnected || event == NetworkEvent::Scanning) {
+            network_connected_.store(false);
+        }
+        // Preserve connectivity events without covering an exclusive local UI.
+        if (IsLocalInteractionActive()) {
+            if (event == NetworkEvent::Connected) {
+                xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_CONNECTED);
+            } else if (event == NetworkEvent::Disconnected || event == NetworkEvent::Scanning) {
+                xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_DISCONNECTED);
+            }
+            return;
+        }
         auto display = Board::GetInstance().GetDisplay();
 
         switch (event) {
@@ -179,6 +202,7 @@ void Application::Initialize() {
 }
 
 void Application::Run() {
+    main_task_handle_ = xTaskGetCurrentTaskHandle();
     // Set the priority of the main task to 10
     vTaskPrioritySet(nullptr, 10);
 
@@ -191,8 +215,15 @@ void Application::Run() {
 
     while (true) {
         auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE, portMAX_DELAY);
+        if (IsLocalInteractionActive()) {
+            // Clear the snapshot too: playback drain can finish the local interaction
+            // later in this same iteration, before the chat/wake handlers run.
+            bits &= ~(MAIN_EVENT_TOGGLE_CHAT | MAIN_EVENT_START_LISTENING |
+                      MAIN_EVENT_STOP_LISTENING | MAIN_EVENT_WAKE_WORD_DETECTED |
+                      MAIN_EVENT_SEND_AUDIO | MAIN_EVENT_VAD_CHANGE | MAIN_EVENT_ERROR);
+        }
 
-        if (bits & MAIN_EVENT_ERROR) {
+        if ((bits & MAIN_EVENT_ERROR) && !IsLocalInteractionActive()) {
             if (GetDeviceState() == kDeviceStateNotifying) {
                 StopNotification();
             }
@@ -218,13 +249,14 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_PLAYBACK_DRAINED) {
+            FinishLocalInteraction();
             if (audio_service_.IsPlaybackIdle()) {
                 notify_player_.OnPlaybackDrained();
             }
             // Deferred listening start (auto mode): the playback queue has
             // drained, so it is now safe to enable voice processing.
-            if (pending_listening_start_ && GetDeviceState() == kDeviceStateListening &&
-                audio_service_.IsPlaybackIdle()) {
+            if (!IsLocalInteractionActive() && pending_listening_start_ &&
+                GetDeviceState() == kDeviceStateListening && audio_service_.IsPlaybackIdle()) {
                 pending_listening_start_ = false;
                 StartListeningAudio();
             }
@@ -244,6 +276,9 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
+                if (IsLocalInteractionActive() || remote_chat_suspended_.load()) {
+                    continue;
+                }
                 if (protocol_ && !protocol_->SendAudio(std::move(packet))) {
                     // Drop the remaining packets. Leaving them in the queue would
                     // stall the Opus codec task (it waits for queue space), which in
@@ -277,6 +312,8 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_CLOCK_TICK) {
+            // A cancelled notification worker may still be leaving a network read.
+            FinishLocalInteraction();
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
@@ -296,6 +333,9 @@ void Application::Run() {
 }
 
 void Application::HandleNetworkConnectedEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     ESP_LOGI(TAG, "Network connected");
     auto state = GetDeviceState();
 
@@ -307,7 +347,8 @@ void Application::HandleNetworkConnectedEvent() {
             return;
         }
 
-        xTaskCreate(
+        activation_in_progress_.store(true);
+        const BaseType_t created = xTaskCreate(
             [](void* arg) {
                 Application* app = static_cast<Application*>(arg);
                 app->ActivationTask();
@@ -315,6 +356,10 @@ void Application::HandleNetworkConnectedEvent() {
                 vTaskDelete(NULL);
             },
             "activation", 4096 * 2, this, 2, &activation_task_handle_);
+        if (created != pdPASS) {
+            activation_in_progress_.store(false);
+            ESP_LOGE(TAG, "Failed to create activation task");
+        }
     }
 
     // Update the status bar immediately to show the network state
@@ -323,6 +368,9 @@ void Application::HandleNetworkConnectedEvent() {
 }
 
 void Application::HandleNetworkDisconnectedEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
     if (state == kDeviceStateNotifying) {
@@ -340,6 +388,9 @@ void Application::HandleNetworkDisconnectedEvent() {
 }
 
 void Application::HandleActivationDoneEvent() {
+    if (!ota_) {
+        return;
+    }
     ESP_LOGI(TAG, "Activation done");
 
     SystemInfo::PrintHeapStats();
@@ -350,7 +401,7 @@ void Application::HandleActivationDoneEvent() {
     // Protocol start may have already raised MAIN_EVENT_ERROR. Do not replace
     // that alert with the "ready" UI/sound — the main loop can process both
     // events back-to-back because the activation task is lower priority.
-    const bool has_error = !last_error_message_.empty();
+    const bool has_error = !last_error_message_.empty() || network_error_pending_.load();
     if (!startup_completed_) {
         startup_completed_ = true;
         pending_startup_wake_word_hint_ = !has_error;
@@ -368,11 +419,12 @@ void Application::HandleActivationDoneEvent() {
     board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
 
     if (!has_error) {
-        Schedule([this]() {
+        ScheduleInteraction(interaction_generation_.load(), [this]() {
             // Play the success sound to indicate the device is ready
             audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
         });
     }
+    activation_in_progress_.store(false);
 }
 
 void Application::ActivationTask() {
@@ -557,20 +609,43 @@ void Application::InitializeProtocol() {
         protocol_ = std::make_unique<MqttProtocol>();
     }
 
-    protocol_->OnConnected([this]() { DismissAlert(); });
+    protocol_->OnConnected([this]() {
+        const uint32_t error_generation = network_error_generation_.load();
+        ScheduleInteraction(interaction_generation_.load(), [this, error_generation]() {
+            if (error_generation == network_error_generation_.load()) {
+                DismissAlert();
+            }
+        });
+    });
 
     protocol_->OnNetworkError([this](const std::string& message) {
-        last_error_message_ = message;
-        xEventGroupSetBits(event_group_, MAIN_EVENT_ERROR);
+        const uint32_t generation = interaction_generation_.load();
+        if (IsLocalInteractionActive()) {
+            return;
+        }
+        network_error_pending_.store(true);
+        ++network_error_generation_;
+        ScheduleInteraction(generation, [this, message]() {
+            network_error_pending_.store(false);
+            last_error_message_ = message;
+            xEventGroupSetBits(event_group_, MAIN_EVENT_ERROR);
+        });
     });
 
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
+        // Serialize admission with mode changes. A callback paused before entry
+        // cannot enqueue a stale packet after the local interaction has ended.
+        std::lock_guard<std::mutex> lock(incoming_audio_mutex_);
+        if (!IsLocalInteractionActive() && !remote_chat_suspended_.load() &&
+            GetDeviceState() == kDeviceStateSpeaking) {
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
         }
     });
 
     protocol_->OnAudioChannelOpened([this, codec, &board]() {
+        if (IsLocalInteractionActive()) {
+            return;
+        }
         board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
         if (protocol_->server_sample_rate() != codec->output_sample_rate()) {
             ESP_LOGW(TAG,
@@ -581,8 +656,13 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnAudioChannelClosed([this, &board]() {
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
-        Schedule([this]() {
+        // Closing a transport can report asynchronously after local play ended.
+        // Keep the idle/provisioning UI intact until a fresh user chat starts.
+        if (remote_chat_suspended_.load()) {
+            return;
+        }
+        ScheduleInteraction(interaction_generation_.load(), [this, &board]() {
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
             SetDeviceState(kDeviceStateIdle);
@@ -590,10 +670,20 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnIncomingJson([this, display](const cJSON* root) {
+        // Capture before parsing: callbacks delayed across enter/exit must stay stale.
+        const uint32_t generation = interaction_generation_.load();
+        if (IsLocalInteractionActive()) {
+            return;
+        }
         // Parse JSON data
         auto type = cJSON_GetObjectItem(root, "type");
         if (!cJSON_IsString(type)) {
             ESP_LOGW(TAG, "Incoming JSON message has no type");
+            return;
+        }
+        if (remote_chat_suspended_.load() &&
+            (strcmp(type->valuestring, "tts") == 0 || strcmp(type->valuestring, "stt") == 0 ||
+             strcmp(type->valuestring, "llm") == 0)) {
             return;
         }
         if (strcmp(type->valuestring, "notify") == 0) {
@@ -625,8 +715,8 @@ void Application::InitializeProtocol() {
                 }
             }
 
-            Schedule([this, url = std::string(audio_url->valuestring),
-                      subtitles = std::move(subtitles)]() mutable {
+            ScheduleInteraction(generation, [this, url = std::string(audio_url->valuestring),
+                                             subtitles = std::move(subtitles)]() mutable {
                 StartNotification(std::move(url), std::move(subtitles));
             });
         } else if (strcmp(type->valuestring, "tts") == 0) {
@@ -635,12 +725,12 @@ void Application::InitializeProtocol() {
                 return;
             }
             if (strcmp(state->valuestring, "start") == 0) {
-                Schedule([this]() {
+                ScheduleInteraction(generation, [this]() {
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
-                Schedule([this]() {
+                ScheduleInteraction(generation, [this]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
@@ -658,11 +748,12 @@ void Application::InitializeProtocol() {
                         glyphs.clear();
                     }
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring),
-                              glyphs = std::move(glyphs), bpp]() {
-                        display->AddTextGlyphs(glyphs, bpp);
-                        display->SetChatMessage("assistant", message.c_str());
-                    });
+                    ScheduleInteraction(generation,
+                                        [display, message = std::string(text->valuestring),
+                                         glyphs = std::move(glyphs), bpp]() {
+                                            display->AddTextGlyphs(glyphs, bpp);
+                                            display->SetChatMessage("assistant", message.c_str());
+                                        });
                 }
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
@@ -674,8 +765,8 @@ void Application::InitializeProtocol() {
                     glyphs.clear();
                 }
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring),
-                          glyphs = std::move(glyphs), bpp]() {
+                ScheduleInteraction(generation, [display, message = std::string(text->valuestring),
+                                                 glyphs = std::move(glyphs), bpp]() {
                     display->AddTextGlyphs(glyphs, bpp);
                     display->SetChatMessage("user", message.c_str());
                 });
@@ -683,14 +774,22 @@ void Application::InitializeProtocol() {
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(emotion)) {
-                Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
-                    display->SetEmotion(emotion_str.c_str());
-                });
+                ScheduleInteraction(generation,
+                                    [display, emotion_str = std::string(emotion->valuestring)]() {
+                                        display->SetEmotion(emotion_str.c_str());
+                                    });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
             if (cJSON_IsObject(payload)) {
-                McpServer::GetInstance().ParseMessage(payload);
+                // MCP handlers may schedule application mutations, so dispatch only
+                // in the main task after checking the originating interaction epoch.
+                auto copy = std::shared_ptr<cJSON>(cJSON_Duplicate(payload, true), cJSON_Delete);
+                if (copy) {
+                    ScheduleInteraction(generation, [copy]() {
+                        McpServer::GetInstance().ParseMessage(copy.get());
+                    });
+                }
             }
         } else if (strcmp(type->valuestring, "system") == 0) {
             auto command = cJSON_GetObjectItem(root, "command");
@@ -698,7 +797,7 @@ void Application::InitializeProtocol() {
                 ESP_LOGI(TAG, "System command: %s", command->valuestring);
                 if (strcmp(command->valuestring, "reboot") == 0) {
                     // Do a reboot if user requests a OTA update
-                    Schedule([this]() { Reboot(); });
+                    ScheduleInteraction(generation, [this]() { Reboot(); });
                 } else {
                     ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
                 }
@@ -708,8 +807,12 @@ void Application::InitializeProtocol() {
             auto message = cJSON_GetObjectItem(root, "message");
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(status) && cJSON_IsString(message) && cJSON_IsString(emotion)) {
-                Alert(status->valuestring, message->valuestring, emotion->valuestring,
-                      Lang::Sounds::OGG_VIBRATION);
+                ScheduleInteraction(generation, [this, status = std::string(status->valuestring),
+                                                 message = std::string(message->valuestring),
+                                                 emotion = std::string(emotion->valuestring)]() {
+                    Alert(status.c_str(), message.c_str(), emotion.c_str(),
+                          Lang::Sounds::OGG_VIBRATION);
+                });
             } else {
                 ESP_LOGW(TAG, "Alert command requires status, message and emotion");
             }
@@ -721,7 +824,8 @@ void Application::InitializeProtocol() {
             if (cJSON_IsObject(payload)) {
                 CJsonStringUniquePtr payload_json(cJSON_PrintUnformatted(payload));
                 if (payload_json) {
-                    Schedule(
+                    ScheduleInteraction(
+                        generation,
                         [this, display, payload_str = std::string(payload_json.get())]() {
                             display->SetChatMessage("system", payload_str.c_str());
                         });
@@ -764,6 +868,17 @@ void Application::ShowActivationCode(const std::string& code, const std::string&
 
 void Application::Alert(const char* status, const char* message, const char* emotion,
                         const std::string_view& sound) {
+    if (GetDeviceState() == kDeviceStateWifiConfiguring) {
+        // Provisioning can begin while the local UI is open. Preserve its prompt
+        // for a silent replay on exit, including prompts shown before game entry.
+        std::lock_guard<std::mutex> lock(mutex_);
+        provisioning_status_ = status;
+        provisioning_message_ = message;
+        provisioning_emotion_ = emotion;
+    }
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     ESP_LOGW(TAG, "Alert [%s] %s: %s", emotion, status, message);
     auto display = Board::GetInstance().GetDisplay();
     display->SetStatus(status);
@@ -775,6 +890,9 @@ void Application::Alert(const char* status, const char* message, const char* emo
 }
 
 void Application::DismissAlert() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     last_error_message_.clear();
     if (GetDeviceState() == kDeviceStateIdle) {
         auto display = Board::GetInstance().GetDisplay();
@@ -784,13 +902,28 @@ void Application::DismissAlert() {
     }
 }
 
-void Application::ToggleChatState() { xEventGroupSetBits(event_group_, MAIN_EVENT_TOGGLE_CHAT); }
+void Application::ToggleChatState() {
+    if (!IsLocalInteractionActive()) {
+        xEventGroupSetBits(event_group_, MAIN_EVENT_TOGGLE_CHAT);
+    }
+}
 
-void Application::StartListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING); }
+void Application::StartListening() {
+    if (!IsLocalInteractionActive()) {
+        xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING);
+    }
+}
 
-void Application::StopListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING); }
+void Application::StopListening() {
+    if (!IsLocalInteractionActive()) {
+        xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING);
+    }
+}
 
 void Application::HandleToggleChatEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     auto state = GetDeviceState();
 
     if (state == kDeviceStateNotifying) {
@@ -821,7 +954,8 @@ void Application::HandleToggleChatEvent() {
         if (!protocol_->IsAudioChannelOpened()) {
             SetDeviceState(kDeviceStateConnecting);
             // Schedule to let the state change be processed first (UI update)
-            Schedule([this, mode]() { ContinueOpenAudioChannel(mode); });
+            ScheduleInteraction(interaction_generation_.load(),
+                                [this, mode]() { ContinueOpenAudioChannel(mode); });
             return;
         }
         SetListeningMode(mode);
@@ -833,6 +967,9 @@ void Application::HandleToggleChatEvent() {
 }
 
 void Application::ContinueOpenAudioChannel(ListeningMode mode) {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     // Check state again in case it was changed during scheduling
     if (GetDeviceState() != kDeviceStateConnecting) {
         return;
@@ -855,6 +992,9 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
 }
 
 void Application::HandleStartListeningEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     auto state = GetDeviceState();
 
     if (state == kDeviceStateNotifying) {
@@ -880,7 +1020,8 @@ void Application::HandleStartListeningEvent() {
         if (!protocol_->IsAudioChannelOpened()) {
             SetDeviceState(kDeviceStateConnecting);
             // Schedule to let the state change be processed first (UI update)
-            Schedule([this]() { ContinueOpenAudioChannel(kListeningModeManualStop); });
+            ScheduleInteraction(interaction_generation_.load(),
+                                [this]() { ContinueOpenAudioChannel(kListeningModeManualStop); });
             return;
         }
         SetListeningMode(kListeningModeManualStop);
@@ -891,6 +1032,9 @@ void Application::HandleStartListeningEvent() {
 }
 
 void Application::HandleStopListeningEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     auto state = GetDeviceState();
 
     if (state == kDeviceStateNotifying) {
@@ -908,6 +1052,9 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     if (!protocol_) {
         return;
     }
@@ -945,6 +1092,9 @@ void Application::HandleWakeWordDetectedEvent() {
 }
 
 void Application::BeginWakeWordInvoke(const std::string& wake_word) {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     // Must run in the main task with the device in idle state
     audio_service_.EncodeWakeWord();
 
@@ -961,7 +1111,8 @@ void Application::BeginWakeWordInvoke(const std::string& wake_word) {
     if (!protocol_->IsAudioChannelOpened()) {
         // Schedule to let the state change be processed first (UI update),
         // then continue with OpenAudioChannel which may block for ~1 second
-        Schedule([this, wake_word]() { ContinueWakeWordInvoke(wake_word); });
+        ScheduleInteraction(interaction_generation_.load(),
+                            [this, wake_word]() { ContinueWakeWordInvoke(wake_word); });
         return;
     }
     // Channel already opened, continue directly
@@ -969,6 +1120,9 @@ void Application::BeginWakeWordInvoke(const std::string& wake_word) {
 }
 
 void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     // Check state again in case it was changed during scheduling
     if (GetDeviceState() != kDeviceStateConnecting) {
         return;
@@ -988,6 +1142,7 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
         }
     }
 
+    remote_chat_suspended_.store(false);
     ESP_LOGI(TAG, "Wake word detected: %s", wake_word.c_str());
 #if CONFIG_SEND_WAKE_WORD_DATA
     // Encode and send the wake word data to the server
@@ -1006,6 +1161,9 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 }
 
 void Application::HandleStateChangedEvent() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     DeviceState new_state = state_machine_.GetState();
     clock_ticks_ = 0;
     // Any state change invalidates a pending deferred listening start;
@@ -1150,6 +1308,9 @@ void Application::HideStartupWakeWordHint() {
 }
 
 void Application::StartListeningAudio() {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
     // Runs in the main loop, either directly from HandleStateChangedEvent or
     // deferred via MAIN_EVENT_PLAYBACK_DRAINED once the playback queue drains.
     if (GetDeviceState() != kDeviceStateListening) {
@@ -1180,7 +1341,8 @@ void Application::ConfigureWakeWordForListening() {
 }
 
 void Application::StartNotification(std::string audio_url, std::vector<NotifySubtitle> subtitles) {
-    if (GetDeviceState() != kDeviceStateIdle || notify_player_.IsBusy()) {
+    if (IsLocalInteractionActive() || GetDeviceState() != kDeviceStateIdle ||
+        notify_player_.IsBusy()) {
         ESP_LOGW(TAG, "Ignoring notify message while device is busy");
         return;
     }
@@ -1245,7 +1407,155 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
     StopNotification();
 }
 
+bool Application::BeginLocalInteraction() {
+    if (xTaskGetCurrentTaskHandle() != main_task_handle_) {
+        ESP_LOGE(TAG, "Local interaction must begin in the main task");
+        return false;
+    }
+    if (IsLocalInteractionActive()) {
+        return !local_interaction_ending_;
+    }
+    const auto state = GetDeviceState();
+    // Run() begins only after board/audio initialization. Starting and passive
+    // provisioning may remain offline indefinitely. Retain either state and defer
+    // network activation until the game exits; audio testing is still excluded.
+    const bool offline_startup =
+        state == kDeviceStateStarting || state == kDeviceStateWifiConfiguring;
+    if (activation_in_progress_.load() || (!startup_completed_ && !offline_startup) ||
+        (!offline_startup && state != kDeviceStateIdle && state != kDeviceStateConnecting &&
+         state != kDeviceStateListening && state != kDeviceStateSpeaking &&
+         state != kDeviceStateNotifying)) {
+        return false;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(incoming_audio_mutex_);
+        local_interaction_active_.store(true);
+        ++interaction_generation_;
+        audio_service_.SetLocalInteractionActive(true);
+    }
+    remote_chat_suspended_.store(true);
+    local_interaction_ending_ = false;
+    pending_listening_start_ = false;
+    play_popup_on_listening_ = false;
+    pending_startup_wake_word_hint_ = false;
+    HideStartupWakeWordHint();
+    notify_player_.Stop();
+    ++notification_playback_id_;
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        if (state == kDeviceStateSpeaking) {
+            AbortSpeaking(kAbortReasonNone);
+        }
+        if (state == kDeviceStateListening) {
+            protocol_->SendStopListening();
+        }
+        protocol_->CloseAudioChannel();
+    }
+    xEventGroupClearBits(event_group_, MAIN_EVENT_TOGGLE_CHAT | MAIN_EVENT_START_LISTENING |
+                                           MAIN_EVENT_STOP_LISTENING |
+                                           MAIN_EVENT_WAKE_WORD_DETECTED | MAIN_EVENT_SEND_AUDIO |
+                                           MAIN_EVENT_ERROR);
+    last_error_message_.clear();
+    network_error_pending_.store(false);
+    if (!offline_startup) {
+        SetDeviceState(kDeviceStateIdle);
+    }
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+    return true;
+}
+
+void Application::EndLocalInteraction() {
+    if (xTaskGetCurrentTaskHandle() != main_task_handle_ || !IsLocalInteractionActive()) {
+        return;
+    }
+    local_interaction_ending_ = true;
+    audio_service_.ResetDecoder();
+    FinishLocalInteraction();
+}
+
+void Application::FinishLocalInteraction() {
+    if (!local_interaction_ending_ || !audio_service_.IsPlaybackIdle() || notify_player_.IsBusy()) {
+        return;
+    }
+    // Do not wake the microphone until the final in-flight speaker frame is gone.
+    // A cancelled HTTP worker must also finish before admitting ordinary audio.
+    {
+        std::lock_guard<std::mutex> lock(incoming_audio_mutex_);
+        audio_service_.SetLocalInteractionActive(false);
+        xEventGroupClearBits(event_group_, MAIN_EVENT_TOGGLE_CHAT | MAIN_EVENT_START_LISTENING |
+                                               MAIN_EVENT_STOP_LISTENING |
+                                               MAIN_EVENT_WAKE_WORD_DETECTED |
+                                               MAIN_EVENT_SEND_AUDIO | MAIN_EVENT_ERROR);
+        ++interaction_generation_;
+        network_error_pending_.store(false);
+        local_interaction_ending_ = false;
+        local_interaction_active_.store(false);
+    }
+    if (network_connected_.load()) {
+        HandleNetworkConnectedEvent();
+    }
+    // A provisioning transition during play stays in provisioning. A normal
+    // interaction is already idle; explicitly process that no-op transition.
+    HandleStateChangedEvent();
+    if (GetDeviceState() == kDeviceStateWifiConfiguring) {
+        RestoreProvisioningAlert();
+    }
+}
+
+void Application::RestoreProvisioningAlert() {
+    std::string status;
+    std::string message;
+    std::string emotion;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        status = provisioning_status_;
+        message = provisioning_message_;
+        emotion = provisioning_emotion_;
+    }
+    if (status.empty()) {
+        status = Lang::Strings::WIFI_CONFIG_MODE;
+        emotion = "gear";
+    }
+    Alert(status.c_str(), message.c_str(), emotion.c_str());
+}
+
+bool Application::PlayLocalInteractionSound(std::string_view sound) {
+    return xTaskGetCurrentTaskHandle() == main_task_handle_ && IsLocalInteractionActive() &&
+           !local_interaction_ending_ && audio_service_.PlayLocalInteractionSound(sound);
+}
+
+void Application::ScheduleInteraction(uint32_t generation, std::function<void()>&& callback) {
+    if (IsLocalInteractionActive() || generation != interaction_generation_.load()) {
+        return;
+    }
+    Schedule([this, generation, callback = std::move(callback)]() {
+        RunInteractionCallback(generation, callback);
+    });
+}
+
+void Application::RunInteractionCallback(uint32_t generation,
+                                         const std::function<void()>& callback) {
+    if (IsLocalInteractionActive() || generation != interaction_generation_.load()) {
+        return;
+    }
+    const bool was_dispatching = dispatching_interaction_;
+    const uint32_t previous_generation = dispatch_generation_;
+    dispatching_interaction_ = true;
+    dispatch_generation_ = generation;
+    callback();
+    dispatch_generation_ = previous_generation;
+    dispatching_interaction_ = was_dispatching;
+}
+
 void Application::Schedule(std::function<void()>&& callback) {
+    // MCP tools and other interaction callbacks can themselves defer work. Carry
+    // their epoch through every main-task continuation, but never through unrelated
+    // board/UI schedules from another task.
+    if (xTaskGetCurrentTaskHandle() == main_task_handle_ && dispatching_interaction_) {
+        callback = [this, generation = dispatch_generation_, callback = std::move(callback)]() {
+            RunInteractionCallback(generation, callback);
+        };
+    }
     {
         std::lock_guard<std::mutex> lock(mutex_);
         main_tasks_.push_back(std::move(callback));
@@ -1262,6 +1572,10 @@ void Application::AbortSpeaking(AbortReason reason) {
 }
 
 void Application::SetListeningMode(ListeningMode mode) {
+    if (IsLocalInteractionActive()) {
+        return;
+    }
+    remote_chat_suspended_.store(false);
     listening_mode_ = mode;
     SetDeviceState(kDeviceStateListening);
 }
@@ -1287,6 +1601,9 @@ void Application::Reboot() {
 }
 
 bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+    if (IsLocalInteractionActive()) {
+        return false;
+    }
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
 
@@ -1346,31 +1663,32 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
 }
 
 void Application::WakeWordInvoke(const std::string& wake_word) {
-    if (!protocol_) {
+    if (IsLocalInteractionActive() || !protocol_) {
         return;
     }
 
+    const uint32_t generation = interaction_generation_.load();
     auto state = GetDeviceState();
 
     if (state == kDeviceStateIdle) {
         // May be called from outside the main task (e.g. board button
         // callbacks), so schedule the invocation instead of running it here
-        Schedule([this, wake_word]() {
+        ScheduleInteraction(generation, [this, wake_word]() {
             if (GetDeviceState() == kDeviceStateIdle) {
                 BeginWakeWordInvoke(wake_word);
             }
         });
     } else if (state == kDeviceStateNotifying) {
-        Schedule([this, wake_word]() {
+        ScheduleInteraction(generation, [this, wake_word]() {
             if (GetDeviceState() == kDeviceStateNotifying) {
                 StopNotification();
                 BeginWakeWordInvoke(wake_word);
             }
         });
     } else if (state == kDeviceStateSpeaking) {
-        Schedule([this]() { AbortSpeaking(kAbortReasonNone); });
+        ScheduleInteraction(generation, [this]() { AbortSpeaking(kAbortReasonNone); });
     } else if (state == kDeviceStateListening) {
-        Schedule([this]() {
+        ScheduleInteraction(generation, [this]() {
             if (protocol_) {
                 protocol_->CloseAudioChannel();
             }
@@ -1379,7 +1697,7 @@ void Application::WakeWordInvoke(const std::string& wake_word) {
 }
 
 bool Application::CanEnterSleepMode() {
-    if (GetDeviceState() != kDeviceStateIdle) {
+    if (IsLocalInteractionActive() || GetDeviceState() != kDeviceStateIdle) {
         return false;
     }
 
