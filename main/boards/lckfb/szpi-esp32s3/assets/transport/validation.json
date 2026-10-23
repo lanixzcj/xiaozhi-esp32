@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Car",
+    "image_bytes": 36400,
+    "sound_bytes": 5083,
+    "excerpt_start": 0,
+    "excerpt_seconds": 1.607,
+    "playback_ms": 1620,
+    "decoded_peak": 0.44925,
+    "ogg_sha256": "8d115572f2a08d0c7d3a5c65f76c83c4858e307ea1d3fdffeed9da1066d38c64"
+  },
+  {
+    "name": "Train",
+    "image_bytes": 36400,
+    "sound_bytes": 7644,
+    "excerpt_start": 0,
+    "excerpt_seconds": 2.4,
+    "playback_ms": 2460,
+    "decoded_peak": 0.41162,
+    "ogg_sha256": "110f402d49de44a4ab95de60582e276f27643aa613239ae465d50d7413525318"
+  },
+  {
+    "name": "Bicycle",
+    "image_bytes": 36400,
+    "sound_bytes": 6169,
+    "excerpt_start": 0,
+    "excerpt_seconds": 1.955,
+    "playback_ms": 1980,
+    "decoded_peak": 0.27652,
+    "ogg_sha256": "812f2df6693ff3d5786b6164b8bb1e27c5f725d0f3fa71aa8cf028a5d2e1e3c5"
+  },
+  {
+    "name": "Plane",
+    "image_bytes": 36400,
+    "sound_bytes": 7825,
+    "excerpt_start": 1,
+    "excerpt_seconds": 2.5,
+    "playback_ms": 2520,
+    "decoded_peak": 0.38513,
+    "ogg_sha256": "b546edf2d6c5edf36e95e2feebdcdd40d4ba23dc56351c37d7046c56dc839674"
+  }
+]

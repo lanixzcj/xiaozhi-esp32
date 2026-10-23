@@ -87,7 +87,7 @@ void AnimalTouchGame::Initialize() {
     if (!layer) {
         return;
     }
-    entry_ = Button(layer, "动物", 240, 196, 72, 40);
+    entry_ = Button(layer, "动物", 160, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
     lv_obj_add_event_cb(
         entry_,
@@ -222,7 +222,7 @@ void AnimalTouchGame::Enter() {
         return;
     }
     auto& app = Application::GetInstance();
-    if (!app.BeginLocalInteraction()) {
+    if (app.IsLocalInteractionActive() || !app.BeginLocalInteraction()) {
         display_->ShowNotification("请稍等", 2000);
         return;
     }

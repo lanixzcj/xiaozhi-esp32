@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+<!-- Original modern electric train illustration, dedicated to CC0 1.0. -->
+<g stroke="#24394e" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+<path d="M48 267h304M76 247l-16 35m50-35-10 35m190-35 10 35m24-35 16 35"/>
+<path d="m144 65 32-29h50l29 29" fill="none"/><path d="M155 29h88"/>
+<rect x="97" y="62" width="206" height="193" rx="43" fill="#e8f0f2"/>
+<path d="M100 193h200v30H100z" fill="#238bd0" stroke="none"/>
+<path d="M128 88h144l12 73H116z" fill="#7bcce9"/>
+<path d="m151 104-17 33m41-33-11 23" stroke="#e4f8ff"/>
+<path d="M200 91v69M122 180h156" fill="none"/>
+<rect x="118" y="202" width="33" height="17" rx="7" fill="#ffe57d"/>
+<rect x="249" y="202" width="33" height="17" rx="7" fill="#ffe57d"/>
+<path d="M157 236h86M150 253v13m100-13v13"/>
+</g></svg>
