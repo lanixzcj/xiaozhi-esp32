@@ -91,3 +91,16 @@ The build script changes local `sdkconfig` and build state. Do not assume the bu
 - CI matrix: `.github/workflows/build.yml`
 
 Keep detailed or fast-changing information in those files, not here. Add a nested `AGENTS.md` only when a subsystem needs specialized instructions.
+
+## Cursor Cloud
+
+ESP-IDF v6.1 for esp32, esp32c3, esp32c5, esp32c6, esp32s3, esp32p4, and esp32s31 is preinstalled. Agent shells are not login shells. Source the SDK before `scripts/build.py`:
+
+```sh
+. /opt/esp/idf-env.sh
+idf.py --version
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/build.py <board-directory> --name <variant-name>
+```
+
+`/usr/local/bin/idf.py` runs without sourcing. The Installation Manager Python environment and toolchains live under `/home/ubuntu/.espressif/tools`. Asset-script dependencies are in `/opt/xiaozhi-host-venv`. Nothing starts on boot. Flashing and serial logs need a connected board.
