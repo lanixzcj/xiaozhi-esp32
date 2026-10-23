@@ -103,4 +103,4 @@ python3 -m unittest discover -s scripts/tests -v
 python3 scripts/build.py <board-directory> --name <variant-name>
 ```
 
-`/usr/local/bin/idf.py` runs without sourcing. The Installation Manager Python environment and toolchains live under `/home/ubuntu/.espressif/tools`. Asset-script dependencies are in `/opt/xiaozhi-host-venv`. Nothing starts on boot. Flashing and serial logs need a connected board.
+`/usr/local/bin/idf.py` runs without sourcing. The Installation Manager Python environment and toolchains live under `/home/ubuntu/.espressif/tools`. Asset-script dependencies are in `/opt/esp/host-venv`. Nothing starts on boot. Flashing and serial logs need a connected board.
