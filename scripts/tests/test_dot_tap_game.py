@@ -12,6 +12,7 @@ class DotTapGameTests(unittest.TestCase):
     def test_session_and_shake(self):
         code = r"""
 #include "dot_tap_session.h"
+#include "dot_tilt.h"
 #include "shake_detector.h"
 #include <cassert>
 #include <limits>
@@ -62,13 +63,44 @@ int main() {
  assert(shake.Feed(0, 0, 8192 + 6000, 100));
  assert(!shake.Feed(0, 0, 8192 + 6000, 160));
  assert(!shake.Feed(0, 0, 8192 + 6000, 210));
- assert(!shake.Feed(0, 0, 8192 + 6000, 1100));
- assert(shake.Feed(0, 0, 8192 + 6000, 1150));
+ for (int i = 0; i < 16; ++i) assert(!shake.Feed(0, 0, 8192 + 6000, 300 + uint32_t(i) * 50));
+ assert(!shake.Feed(0, 0, 8192 + 14000, 1200));
+ assert(shake.Feed(0, 0, 8192 + 14000, 1250));
  shake.Reset();
  assert(!shake.Feed(0, 0, 8192, 0));
  for (int i = 1; i <= 40; ++i) {
   assert(!shake.Feed(int16_t(i * 80), 0, int16_t(8192 - i * 40), uint32_t(i) * 50));
  }
+ // A deliberate tilt, about 0.04 g per 50 ms, must not scatter the page.
+ shake.Reset();
+ assert(!shake.Feed(0, 0, 8192, 0));
+ for (int i = 1; i <= 30; ++i) {
+  assert(!shake.Feed(int16_t(-300 * i), 0, 6000, uint32_t(i) * 50));
+ }
+
+ int px = 0, py = 0;
+ DotRoll::Map(0, 0, 8192, px, py);
+ assert(px == 0 && py == 0);
+ DotRoll::Map(-4096, 0, 5000, px, py);
+ assert(px > 400 && py == 0);  // chip -X is screen-right
+ DotRoll::Map(4096, 0, 5000, px, py);
+ assert(px < -400 && py == 0);
+ DotRoll::Map(0, 4096, 5000, px, py);
+ assert(py > 400 && px == 0);  // chip +Y is screen-down in LVGL
+ DotRoll::Map(200, 0, 8192, px, py);
+ assert(px == 0);  // inside the deadzone
+
+ DotRoll roll;
+ roll.NoteHome(2, 128, 88, true);
+ for (int i = 0; i < 30; ++i) roll.Step(800, 0, 50);
+ assert(roll.body(2).x > 200);
+ assert(roll.body(2).x <= 320 - 64 - 4);
+ assert(roll.body(2).y > 70 && roll.body(2).y < 110);
+ for (int i = 0; i < 50; ++i) roll.Step(0, 0, 50);
+ assert(roll.body(2).x > 90 && roll.body(2).x < 170);
+ roll.NoteHome(0, 24, 14, true);
+ for (int i = 0; i < 40; ++i) roll.Step(-1000, 0, 50);
+ assert(roll.body(0).x <= 8);
 }
 """
         with tempfile.TemporaryDirectory() as temporary:

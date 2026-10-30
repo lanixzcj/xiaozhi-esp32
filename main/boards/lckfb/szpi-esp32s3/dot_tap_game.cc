@@ -304,16 +304,18 @@ void DotTapGame::Poll() {
     const auto page = session_.page();
     const bool watch_imu = accel_ != nullptr && accel_->available() && read_failures_ < 8 &&
                            page != DotTapSession::Page::Closed && page != DotTapSession::Page::Rest;
+    int16_t ax = 0;
+    int16_t ay = 0;
+    int16_t az = 0;
+    bool have_accel = false;
     bool shook = false;
     if (watch_imu) {
-        int16_t x = 0;
-        int16_t y = 0;
-        int16_t z = 0;
-        if (!accel_->ReadAccel(x, y, z)) {
+        if (!accel_->ReadAccel(ax, ay, az)) {
             ++read_failures_;
         } else {
             read_failures_ = 0;
-            if (shake_.Feed(x, y, z, now) && page == DotTapSession::Page::Mixed) {
+            have_accel = true;
+            if (shake_.Feed(ax, ay, az, now) && page == DotTapSession::Page::Mixed) {
                 shook = true;
             }
         }
@@ -331,18 +333,58 @@ void DotTapGame::Poll() {
         fallback_latched_.store(true);
         OnShake(now);
     }
-    if (!session_.Tick(now)) {
+    if (session_.Tick(now)) {
+        const auto next = session_.page();
+        if (next == DotTapSession::Page::Settling) {
+            ShowPage(next);
+        } else if (next == DotTapSession::Page::Settled) {
+            ShowPage(next);
+            PlayCue(static_cast<int>(dot_tap_sounds::Cue::Settle));
+        } else if (next == DotTapSession::Page::Rest) {
+            ShowPage(next);
+            app.GetAudioService().ResetDecoder();
+        }
+    }
+    int pull_x = 0;
+    int pull_y = 0;
+    if (have_accel) {
+        DotRoll::Map(ax, ay, az, pull_x, pull_y);
+    }
+    ApplyTilt(now, pull_x, pull_y);
+}
+
+void DotTapGame::ApplyTilt(uint32_t now, int pull_x_mg, int pull_y_mg) {
+    const auto page = session_.page();
+    const bool tilt = page == DotTapSession::Page::One || page == DotTapSession::Page::Five ||
+                      page == DotTapSession::Page::Mixed || page == DotTapSession::Page::Settled;
+    if (!tilt || now < pose_lock_until_) {
+        tilt_synced_ = false;
         return;
     }
-    const auto next = session_.page();
-    if (next == DotTapSession::Page::Settling) {
-        ShowPage(next);
-    } else if (next == DotTapSession::Page::Settled) {
-        ShowPage(next);
-        PlayCue(static_cast<int>(dot_tap_sounds::Cue::Settle));
-    } else if (next == DotTapSession::Page::Rest) {
-        ShowPage(next);
-        app.GetAudioService().ResetDecoder();
+    if (!tilt_synced_) {
+        for (int index = 0; index < DotTapSession::kDots; ++index) {
+            if (!roll_.body(index).alive) {
+                continue;
+            }
+            lv_anim_delete(dots_[index], SetX);
+            lv_anim_delete(dots_[index], SetY);
+        }
+        tilt_synced_ = true;
+        last_tilt_ms_ = now;
+        return;
+    }
+    const uint32_t dt = uint32_t(now - last_tilt_ms_);
+    if (dt == 0) {
+        return;
+    }
+    last_tilt_ms_ = now;
+    roll_.Step(pull_x_mg, pull_y_mg, dt);
+    for (int index = 0; index < DotTapSession::kDots; ++index) {
+        const auto& body = roll_.body(index);
+        if (!body.alive) {
+            continue;
+        }
+        lv_obj_set_pos(dots_[index], int(body.x + 0.5f), int(body.y + 0.5f));
     }
 }
 
@@ -400,12 +442,15 @@ void DotTapGame::OnShake(uint32_t now) {
 }
 
 void DotTapGame::ShowPage(DotTapSession::Page page) {
+    tilt_synced_ = false;
+    uint32_t lock_ms = 0;
     if (page == DotTapSession::Page::Rest) {
         for (int index = 0; index < DotTapSession::kDots; ++index) {
             HideDot(index);
         }
         lv_obj_remove_flag(rest_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(rest_);
+        pose_lock_until_ = lv_tick_get();
         return;
     }
     lv_obj_add_flag(rest_, LV_OBJ_FLAG_HIDDEN);
@@ -418,6 +463,7 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
                 HideDot(index);
             }
         }
+        pose_lock_until_ = lv_tick_get();
         return;
     }
     if (page == DotTapSession::Page::Five) {
@@ -426,6 +472,7 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
             const auto motion = index == DotTapSession::kCenter ? Motion::Place : Motion::Pop;
             ShowDot(index, place.x, place.y, place.color, motion, LV_SCALE_NONE, 0);
         }
+        pose_lock_until_ = lv_tick_get();
         return;
     }
     const Place* places = nullptr;
@@ -434,14 +481,17 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
     uint32_t ms = kMixMs;
     if (page == DotTapSession::Page::Mixed) {
         places = kMixed;
+        lock_ms = kMixMs;
     } else if (page == DotTapSession::Page::Scattering) {
         places = kScattered;
         scale = kScatterScale;
         ms = DotTapSession::kScatterMs;
+        lock_ms = ms;
     } else if (page == DotTapSession::Page::Settling) {
         places = kCross;
         motion = Motion::Arrive;
         ms = DotTapSession::kSettleMs;
+        lock_ms = ms;
     } else if (page == DotTapSession::Page::Settled) {
         places = kCross;
         motion = Motion::Place;
@@ -452,10 +502,12 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
     for (int index = 0; index < DotTapSession::kDots; ++index) {
         ShowDot(index, places[index].x, places[index].y, places[index].color, motion, scale, ms);
     }
+    pose_lock_until_ = lv_tick_get() + lock_ms;
 }
 
 void DotTapGame::ShowDot(int index, int x, int y, uint32_t color, Motion motion, int scale,
                          uint32_t ms) {
+    roll_.NoteHome(index, float(x), float(y), true);
     auto* dot = dots_[index];
     lv_anim_delete(dot, SetX);
     lv_anim_delete(dot, SetY);
@@ -484,6 +536,7 @@ void DotTapGame::ShowDot(int index, int x, int y, uint32_t color, Motion motion,
 }
 
 void DotTapGame::HideDot(int index) {
+    roll_.NoteHome(index, 0, 0, false);
     auto* dot = dots_[index];
     lv_anim_delete(dot, SetX);
     lv_anim_delete(dot, SetY);

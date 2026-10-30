@@ -12,6 +12,7 @@
 #include "accel_source.h"
 #include "display.h"
 #include "dot_tap_session.h"
+#include "dot_tilt.h"
 #include "shake_detector.h"
 
 // Full-screen flat-dot game for a toddler and a parent. The chat screen stays
@@ -52,6 +53,10 @@ private:
     std::atomic<uint32_t> pressed_at_{0};
     uint32_t generation_ = 0;
     int read_failures_ = 0;
+    DotRoll roll_;
+    uint32_t pose_lock_until_ = 0;
+    uint32_t last_tilt_ms_ = 0;
+    bool tilt_synced_ = false;
     int scale_[DotTapSession::kDots] = {
         LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE};
 
@@ -61,6 +66,7 @@ private:
     void Action(uint32_t generation, int index);
     void Restart();
     void OnShake(uint32_t now);
+    void ApplyTilt(uint32_t now, int pull_x_mg, int pull_y_mg);
     void ShowPage(DotTapSession::Page page);
     void ShowDot(int index, int x, int y, uint32_t color, Motion motion, int scale, uint32_t ms);
     void HideDot(int index);

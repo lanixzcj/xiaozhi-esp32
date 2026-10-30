@@ -15,12 +15,13 @@
 //     for a playful shake.
 //   * Two high samples 20–280 ms apart reject a single spike.
 //   * kCooldownMs (900 ms) so one jostle cannot retrigger.
-//   * Baseline keeps 1/16 of each step (~0.8 s time constant at 50 ms).
+//   * Baseline keeps 1/4 of each step (~0.2 s at 50 ms), so a slow tilt is
+//     absorbed and only a real jerk reaches kDynamicMilliG.
 class ShakeDetector {
 public:
     static constexpr int kLsbPerG = 8192;
     static constexpr int kDynamicMilliG = 450;
-    static constexpr int kBaselineShift = 4;
+    static constexpr int kBaselineShift = 2;
     static constexpr uint32_t kMinGapMs = 20;
     static constexpr uint32_t kConfirmWindowMs = 280;
     static constexpr uint32_t kCooldownMs = 900;

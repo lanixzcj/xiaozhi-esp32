@@ -209,6 +209,45 @@ int main(int argc, char** argv) {
     game.RequestExit();
     assert(!game.IsVisible());
 
+    accel.ax = 0;
+    accel.ay = 0;
+    accel.az = 8192;
+    Click(entry);
+    Click(dots[2]);
+    app.audio.busy = false;
+    Click(dots[0]);
+    app.audio.busy = false;
+    assert(game.page() == DotTapSession::Page::Mixed);
+    for (int i = 0; i < 10; ++i) {
+        Advance(50);
+    }
+    for (int i = 1; i <= 40; ++i) {
+        accel.ax = int16_t(-8000 * i / 40);
+        Advance(50);
+    }
+    lv_obj_update_layout(panel);
+    assert(game.page() == DotTapSession::Page::Mixed);
+    assert(lv_obj_get_x(dots[2]) > 180);
+    for (auto* dot : dots) {
+        assert(lv_obj_get_x(dot) >= 0 && lv_obj_get_x(dot) <= 320 - 64);
+        assert(lv_obj_get_y(dot) >= 0 && lv_obj_get_y(dot) <= 240 - 64);
+    }
+    Snapshot("tilt-right");
+    for (int i = 1; i <= 30; ++i) {
+        accel.ax = int16_t(-8000 + 16000 * i / 30);
+        Advance(50);
+    }
+    accel.ax = 8000;
+    for (int i = 0; i < 40; ++i) {
+        Advance(50);
+    }
+    lv_obj_update_layout(panel);
+    assert(game.page() == DotTapSession::Page::Mixed);
+    assert(lv_obj_get_x(dots[2]) < 70);
+    Snapshot("tilt-left");
+    game.RequestExit();
+    assert(!game.IsVisible());
+
     lv_mem_monitor_t before{}, after{};
     lv_mem_monitor(&before);
     accel.on = false;
