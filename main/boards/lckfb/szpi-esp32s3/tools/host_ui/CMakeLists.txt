@@ -18,3 +18,8 @@ add_executable(check check.cc "${BOARD}/animal_touch_game.cc" "${BOARD}/listen_p
 target_include_directories(check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/stubs" "${BOARD}")
 target_compile_options(check PRIVATE -UNDEBUG)
 target_link_libraries(check lvgl m)
+
+add_executable(dot_check dot_check.cc "${BOARD}/dot_tap_game.cc" "${BOARD}/animal_game_font.c")
+target_include_directories(dot_check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/stubs" "${BOARD}")
+target_compile_options(dot_check PRIVATE -UNDEBUG)
+target_link_libraries(dot_check lvgl m)

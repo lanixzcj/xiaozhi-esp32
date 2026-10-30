@@ -1,4 +1,6 @@
 #include "animal_touch_game.h"
+#include "dot_tap_game.h"
+#include "qmi8658.h"
 #include "transport_touch_game.h"
 #include "application.h"
 #include "button.h"
@@ -70,9 +72,11 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+    Qmi8658 imu_;
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
     AnimalTouchGame* animal_game_ = nullptr;
     TransportTouchGame* transport_game_ = nullptr;
+    DotTapGame* dot_game_ = nullptr;
 #endif
 
     void InitializeI2c() {
@@ -93,6 +97,9 @@ private:
 
         // Initialize PCA9557
         pca9557_ = new Pca9557(i2c_bus_, 0x19);
+
+        // QMI8658 shares this bus. A missing chip must not abort board setup.
+        imu_.Init(i2c_bus_);
     }
 
     void InitializeSpi() {
@@ -110,6 +117,10 @@ private:
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (dot_game_ && dot_game_->IsVisible()) {
+                dot_game_->RequestExit();
+                return;
+            }
             if (transport_game_ && transport_game_->IsVisible()) {
                 transport_game_->RequestExit();
                 return;
@@ -133,7 +144,8 @@ private:
         boot_button_.OnPressDown([this]() {
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
-                (transport_game_ && transport_game_->IsVisible())) {
+                (transport_game_ && transport_game_->IsVisible()) ||
+                (dot_game_ && dot_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -144,7 +156,8 @@ private:
         boot_button_.OnPressUp([this]() {
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
-                (transport_game_ && transport_game_->IsVisible())) {
+                (transport_game_ && transport_game_->IsVisible()) ||
+                (dot_game_ && dot_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -157,7 +170,8 @@ private:
         boot_button_.OnDoubleClick([this]() {
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
-                (transport_game_ && transport_game_->IsVisible())) {
+                (transport_game_ && transport_game_->IsVisible()) ||
+                (dot_game_ && dot_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -262,10 +276,12 @@ private:
             if (touch_input) {
                 animal_game_ = new AnimalTouchGame(display_);
                 transport_game_ = new TransportTouchGame(display_);
+                dot_game_ = new DotTapGame(display_, &imu_);
                 // Run after Application has initialized display, audio and callbacks.
                 Application::GetInstance().Schedule([this]() {
                     animal_game_->Initialize();
                     transport_game_->Initialize();
+                    dot_game_->Initialize();
                 });
             }
 #else
