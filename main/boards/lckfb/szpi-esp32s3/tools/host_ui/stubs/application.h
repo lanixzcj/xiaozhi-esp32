@@ -6,6 +6,7 @@ class AudioService {
 public:
     bool busy = false;
     bool IsPlaybackIdle() { return !busy; }
+    void ResetDecoder() { busy = false; }
 };
 class Application {
 public:
@@ -15,6 +16,7 @@ public:
     }
     AudioService audio;
     int sounds = 0;
+    std::string_view last;
     bool active = false;
     bool deferred = false;
     std::deque<std::function<void()>> pending;
@@ -43,6 +45,7 @@ public:
         if (!active || audio.busy || s.empty())
             return false;
         ++sounds;
+        last = s;
         audio.busy = true;
         return true;
     }
