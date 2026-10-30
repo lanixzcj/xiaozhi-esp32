@@ -35,11 +35,13 @@ int main() {
    assert(s.Choose(now, 1 - answer)); assert(!s.correct());
    assert(!s.Choose(now, answer));
    assert(!s.Tick(now + 899, true));
+   assert(!s.Tick(now + 900, false)); // wrong-answer replay still playing
    assert(s.Tick(now + 900, true)); now += 900;
    assert(s.phase() == P::Choosing && s.round() == round);
    assert(s.Listen(now)); // explicit replay
    assert(s.Tick(now + 3000, true)); now += 3000;
    assert(s.Choose(now, answer)); assert(s.correct());
+   assert(!s.Tick(now + 900, false)); // cheer still playing
    assert(s.Tick(now + 900, true)); now += 900;
   }
   assert(s.phase() == P::Rest);
@@ -64,14 +66,22 @@ int main() {
             subprocess.run([str(path / 'test')], check=True)
 
     def test_overlay_guards(self):
-        src = (BOARD / 'transport_touch_game.cc').read_text()
-        for guard in ['generation != generation_', 'round != session_.round()', 'action_pending_.exchange(true)', 'poll_pending_.exchange(true)', 'app.IsLocalInteractionActive() || !app.BeginLocalInteraction()', 'EndLocalInteraction()', 'LV_EVENT_SHORT_CLICKED']:
+        src = (BOARD / 'listen_pick_touch.cc').read_text()
+        for guard in ['generation != generation_', 'round != session_.round()', 'action_pending_.exchange(true)', 'poll_pending_.exchange(true)', 'app.IsLocalInteractionActive() || !app.BeginLocalInteraction()', 'EndLocalInteraction()', 'LV_EVENT_SHORT_CLICKED', 'listen_pick_cheer::Get()', 'kParentHoldMs']:
             self.assertIn(guard, src)
-        for forbidden in ['lv_screen_load', 'lv_obj_clean', 'LV_EVENT_PRESSING', 'LV_EVENT_LONG_PRESSED_REPEAT', 'nvs_', 'esp_restart']:
-            self.assertNotIn(forbidden, src)
+        for name in ('listen_pick_touch.cc', 'transport_touch_game.cc', 'animal_touch_game.cc'):
+            text = (BOARD / name).read_text()
+            for forbidden in ['lv_screen_load', 'lv_obj_clean', 'LV_EVENT_PRESSING', 'LV_EVENT_LONG_PRESSED_REPEAT', 'nvs_', 'esp_restart']:
+                self.assertNotIn(forbidden, text, name)
+        transport = (BOARD / 'transport_touch_game.cc').read_text()
+        animal = (BOARD / 'animal_touch_game.cc').read_text()
+        self.assertIn('"交通", 240', transport)
+        self.assertIn('"动物", 160', animal)
+        self.assertIn('animal_game_photo', animal)
         board = (BOARD / 'lichuang_dev_board.cc').read_text()
         self.assertIn('transport_game_->RequestExit()', board)
         self.assertEqual(board.count('(transport_game_ && transport_game_->IsVisible())'), 4)
+        self.assertEqual(board.count('(animal_game_ && animal_game_->IsVisible())'), 4)
 
 if __name__ == '__main__':
     unittest.main()
