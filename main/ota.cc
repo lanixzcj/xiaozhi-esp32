@@ -1,7 +1,8 @@
 #include "ota.h"
-#include "system_info.h"
-#include "settings.h"
 #include "assets/lang_config.h"
+#include "controlled_trial.h"
+#include "settings.h"
+#include "system_info.h"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -85,6 +86,10 @@ std::unique_ptr<Http> Ota::SetupHttp() {
  * Specification: https://ccnphfhqs21z.feishu.cn/wiki/FjW6wZmisimNBBkov6OcmfvknVd
  */
 NetworkResult<> Ota::CheckVersion() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: OTA check/config refresh disabled");
+        return std::unexpected(NetworkError::InvalidArgument());
+    }
     auto& board = Board::GetInstance();
     auto app_desc = esp_app_get_description();
 
@@ -258,6 +263,10 @@ NetworkResult<> Ota::CheckVersion() {
 }
 
 void Ota::MarkCurrentVersionValid() {
+    if (ControlledTrial::FirmwareProtected()) {
+        ESP_LOGW(TAG, "CUSTOM PROTECTION: automatic OTA validity confirmation disabled");
+        return;
+    }
     auto partition = esp_ota_get_running_partition();
     if (strcmp(partition->label, "factory") == 0) {
         ESP_LOGI(TAG, "Running from factory partition, skipping");
@@ -278,6 +287,10 @@ void Ota::MarkCurrentVersionValid() {
 }
 
 bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback) {
+    if (ControlledTrial::FirmwareProtected()) {
+        ESP_LOGW(TAG, "CUSTOM PROTECTION: OTA writes and boot selection disabled");
+        return false;
+    }
     ESP_LOGI(TAG, "Upgrading firmware from %s", firmware_url.c_str());
     esp_ota_handle_t update_handle = 0;
     auto update_partition = esp_ota_get_next_update_partition(NULL);

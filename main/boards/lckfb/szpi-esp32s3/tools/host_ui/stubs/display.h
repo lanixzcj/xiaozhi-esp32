@@ -2,6 +2,7 @@
 #include <string>
 class Display {
 public:
+    int GetTopBarBottom() const { return 24; }
     bool IsSetupUICalled() const { return true; }
     void ShowNotification(const char*, int) {}
 };

@@ -129,6 +129,7 @@ void DotTapGame::Initialize() {
     auto layer = lv_layer_top();
     entry_ = Chip(layer, "轻点", 84, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
+    UpdateEntryPosition();
 
     panel_ = Paper(layer, 320, 240);
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_CLICKABLE);
@@ -245,7 +246,9 @@ void DotTapGame::Initialize() {
     lv_timer_create(
         [](lv_timer_t* timer) {
             auto* self = static_cast<DotTapGame*>(lv_timer_get_user_data(timer));
-            if (self->visible_.load() && !self->poll_pending_.exchange(true)) {
+            if (!self->visible_.load()) {
+                self->UpdateEntryPosition();
+            } else if (!self->poll_pending_.exchange(true)) {
                 Application::GetInstance().Schedule([self]() {
                     self->Poll();
                     self->poll_pending_.store(false);
@@ -253,6 +256,14 @@ void DotTapGame::Initialize() {
             }
         },
         50, this);
+}
+
+void DotTapGame::UpdateEntryPosition() {
+    if (!entry_)
+        return;
+    const int y = display_->GetTopBarBottom() + 4;
+    if (lv_obj_get_y(entry_) != y)
+        lv_obj_set_y(entry_, y);
 }
 
 void DotTapGame::Enter() {
@@ -302,6 +313,7 @@ void DotTapGame::Exit() {
     rounds_.Reset();
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(rest_, LV_OBJ_FLAG_HIDDEN);
+    UpdateEntryPosition();
     lv_obj_remove_flag(entry_, LV_OBJ_FLAG_HIDDEN);
     Application::GetInstance().EndLocalInteraction();
 }

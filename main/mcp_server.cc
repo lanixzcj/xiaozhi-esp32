@@ -1,3 +1,4 @@
+#include "controlled_trial.h"
 /*
  * MCP Server Implementation
  * Reference: https://modelcontextprotocol.io/specification/2024-11-05
@@ -327,6 +328,10 @@ void McpServer::AddUserOnlyTools() {
 }
 
 void McpServer::AddTool(std::unique_ptr<McpTool> tool) {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: MCP tool registration disabled");
+        return;
+    }
     // Prevent adding duplicate tools
     if (std::find_if(tools_.begin(), tools_.end(), [&tool](const auto& existing) {
             return existing->name() == tool->name();

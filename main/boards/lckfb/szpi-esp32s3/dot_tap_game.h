@@ -65,6 +65,7 @@ private:
     int scale_[DotTapSession::kDots] = {
         LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE};
 
+    void UpdateEntryPosition();
     void Enter();
     void Exit();
     void Poll();

@@ -49,6 +49,7 @@ class AssetsTest(unittest.TestCase):
             cjson_libs = [str(cjson_object), "-lm"]
 
         stubs = {
+            "sdkconfig.h": "#pragma once\n",
             "host_state.h": r'''
                 #pragma once
                 #include <cassert>

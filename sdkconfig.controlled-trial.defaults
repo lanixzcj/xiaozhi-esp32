@@ -1,0 +1,6 @@
+# Apply on top of the packaged SDK config in a clean build workspace.
+CONFIG_CONTROLLED_TRIAL=y
+CONFIG_FLASH_NONE_ASSETS=y
+# CONFIG_FLASH_DEFAULT_ASSETS is not set
+# CONFIG_FLASH_CUSTOM_ASSETS is not set
+# CONFIG_FLASH_EXPRESSION_ASSETS is not set

@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
     game.Initialize();
     auto layer = lv_layer_top();
     auto entry = lv_obj_get_child(layer, 0);
+    assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4);
     auto panel = lv_obj_get_child(layer, 1);
     auto hint = lv_obj_get_child(panel, 0);
     auto cards = std::array<lv_obj_t*, 2>{lv_obj_get_child(panel, 2), lv_obj_get_child(panel, 3)};

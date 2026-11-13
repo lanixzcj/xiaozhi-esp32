@@ -1,4 +1,5 @@
 #include "box_audio_codec.h"
+#include "controlled_trial.h"
 
 #include <esp_log.h>
 #include <driver/i2c_master.h>
@@ -186,6 +187,8 @@ void BoxAudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpio_
 }
 
 void BoxAudioCodec::SetOutputVolume(int volume) {
+    // Clamp before the hardware call, not only in the base-class setter.
+    volume = ControlledTrial::ClampOutputVolume(volume);
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, volume));
     AudioCodec::SetOutputVolume(volume);
 }

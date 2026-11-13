@@ -42,3 +42,12 @@ Exact excerpt boundaries, source URLs, authors, processing, and hashes for
 all six recordings are retained in assets/audio/recording-provenance.json.
 The original creators have not endorsed this firmware. Audio assets remain
 independent of the software's MIT license.
+
+2026-11-14 replacements (supersede historical cat/dog payloads):
+Cat: Little meow of a cat #3 — Joseph SARDIN
+https://bigsoundbank.com/little-meow-of-a-cat-3-s1473.html
+Dog: Small dog barking — Joseph SARDIN; excerpt 3.0–4.2 s
+https://bigsoundbank.com/small-dog-barking-s0612.html
+Both CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+Adapted: high/low-pass, fades, reduced constant gain, mono 24 kHz, trailing
+silence, Opus encoding. No endorsement by the recorder is implied.

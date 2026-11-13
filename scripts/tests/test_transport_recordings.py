@@ -20,7 +20,7 @@ class TransportRecordingTests(unittest.TestCase):
         header += 'default: return {};}}}\n'
         case = animal.AnimalRecordingTests('test_actual_admission_accepts_all_recordings_atomically')
         def compile_driver(driver):
-            old = 'constexpr size_t counts[] = {40, 35, 34, 45, 41, 36};'
+            old = 'constexpr size_t counts[] = {36, 36, 34, 45, 41, 36};'
             self.assertIn(old, driver)
             driver = driver.replace(old, 'constexpr size_t counts[] = {27, 41, 33, 42};')
             local.LocalInteractionTests.compile_and_run(case, header + driver,

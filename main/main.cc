@@ -8,6 +8,7 @@
 #include <freertos/task.h>
 
 #include "application.h"
+#include "controlled_trial.h"
 
 #define TAG "main"
 
@@ -15,13 +16,22 @@ extern "C" void app_main(void)
 {
     // Initialize NVS flash for WiFi configuration
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_LOGW(TAG, "Erasing NVS flash to fix corruption");
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "STARTUP STOP: NVS init failed (%s); NVS was not erased",
+                 esp_err_to_name(ret));
+        return;
     }
-    ESP_ERROR_CHECK(ret);
 
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG,
+                 "CONTROLLED TRIAL: offline; settings read-only; no OTA validity confirmation");
+    }
+
+    if (!ControlledTrial::Enabled() && ControlledTrial::FirmwareProtected()) {
+        ESP_LOGW(TAG,
+                 "CUSTOM NETWORK: normal chat/game/volume; remote firmware upgrades and automatic "
+                 "OTA confirmation disabled");
+    }
     // Initialize and run the application
     auto& app = Application::GetInstance();
     app.Initialize();

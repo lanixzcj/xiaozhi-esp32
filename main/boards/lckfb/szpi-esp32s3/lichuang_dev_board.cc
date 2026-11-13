@@ -1,17 +1,18 @@
 #include "animal_touch_game.h"
-#include "dot_tap_game.h"
-#include "qmi8658.h"
-#include "transport_touch_game.h"
 #include "application.h"
 #include "button.h"
 #include "codecs/box_audio_codec.h"
 #include "config.h"
+#include "controlled_trial.h"
 #include "display/emote_display.h"
 #include "display/lcd_display.h"
+#include "dot_tap_game.h"
 #include "esp32_camera.h"
 #include "i2c_device.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#include "qmi8658.h"
+#include "transport_touch_game.h"
 #include "wifi_board.h"
 
 #include <esp_log.h>
@@ -70,7 +71,7 @@ private:
     Button boot_button_;
     Display* display_;
     Pca9557* pca9557_;
-    Esp32Camera* camera_;
+    Esp32Camera* camera_ = nullptr;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
     Qmi8658 imu_;
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
@@ -293,6 +294,9 @@ private:
     }
 
     void InitializeCamera() {
+        if (ControlledTrial::Enabled()) {
+            return;
+        }
         // Open camera power
         pca9557_->SetOutputState(2, 0);
 
@@ -328,6 +332,9 @@ private:
     }
 
     void InitializeTools() {
+        if (ControlledTrial::Enabled()) {
+            return;
+        }
         auto &mcp_server = McpServer::GetInstance();
         mcp_server.AddTool("self.system.reconfigure_wifi",
             "End this conversation and enter WiFi configuration mode.\n"

@@ -53,6 +53,7 @@ private:
     size_t seed_ = 0;
     bool pressed_ = false;
 
+    void UpdateEntryPosition();
     void Enter();
     void Exit();
     void Poll();

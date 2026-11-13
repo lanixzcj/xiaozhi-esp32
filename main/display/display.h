@@ -58,6 +58,8 @@ public:
     virtual void SetupUI() { setup_ui_called_ = true; }
     virtual bool IsMonochrome() const { return false; }
     virtual bool SupportsGuiOperations() const { return false; }
+    // Screen-coordinate header bottom. Caller holds the display/LVGL lock.
+    virtual int GetTopBarBottom() const { return 0; }
     virtual void SetHideSubtitle(bool hide) { (void)hide; }
     virtual bool InsertAnimDialog(const char* name, uint32_t duration_ms) {
         (void)name;

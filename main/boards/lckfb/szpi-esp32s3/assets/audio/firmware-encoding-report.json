@@ -1,35 +1,35 @@
 [
   {
     "name": "cat",
-    "bytes": 7997,
-    "source_frames": 56880,
-    "source_seconds": 2.37,
-    "ogg_seconds": 2.3765,
-    "untrimmed_playback_seconds": 2.4,
-    "packets": 40,
+    "bytes": 7211,
+    "source_frames": 50400,
+    "source_seconds": 2.1,
+    "ogg_seconds": 2.1065,
+    "untrimmed_playback_seconds": 2.16,
+    "packets": 36,
     "largest_packet_bytes": 180,
-    "largest_header_packet_bytes": 599,
-    "decoded_frames": 56880,
-    "decoded_peak_dbfs": -10.93,
-    "decoded_rms_dbfs": -26.47,
-    "source_sha256": "3c0736eabafb408fc4c8b7dc8330a62312d4c6fb392eea1565e712a7592e23a8",
-    "sha256": "d2b6b082b406dbef939c8b4b33a5628a68f34dfae2f4e94f71e95020a3ae2945"
+    "largest_header_packet_bytes": 537,
+    "decoded_frames": 50400,
+    "decoded_peak_dbfs": -17.98,
+    "decoded_rms_dbfs": -36.3,
+    "source_sha256": "5d64f758b146d8f0a5bdc9c863305c2f1f52c134789c24d0e79fbd4cc0d73bdf",
+    "sha256": "6a918098f4c7ec36d3bc94d9395902a23189ebf52dfa2fb6138eda70d400b027"
   },
   {
     "name": "dog",
-    "bytes": 6997,
-    "source_frames": 48926,
-    "source_seconds": 2.0385833333333334,
-    "ogg_seconds": 2.045083,
-    "untrimmed_playback_seconds": 2.1,
-    "packets": 35,
+    "bytes": 7203,
+    "source_frames": 50400,
+    "source_seconds": 2.1,
+    "ogg_seconds": 2.1065,
+    "untrimmed_playback_seconds": 2.16,
+    "packets": 36,
     "largest_packet_bytes": 180,
-    "largest_header_packet_bytes": 505,
-    "decoded_frames": 48926,
-    "decoded_peak_dbfs": -5.7,
-    "decoded_rms_dbfs": -26.02,
-    "source_sha256": "7959bf7c42683145ac69bd38d460470d80828dc745120f8944ecfefb6047c02f",
-    "sha256": "8ebda40dfb5ba6f7cdca1f5db45617c2413b0ad767eef5a3a87710a9e150b164"
+    "largest_header_packet_bytes": 529,
+    "decoded_frames": 50400,
+    "decoded_peak_dbfs": -18.1,
+    "decoded_rms_dbfs": -37.87,
+    "source_sha256": "a9abbe3bdea3ca433edb3d1dba2ba12cd680026e541507c39bf8ca532aebb1e1",
+    "sha256": "e1d5bfbcc7554e2b302663d802c99d54650df6a361d496c8662bd8531f795b0e"
   },
   {
     "name": "duck",
@@ -45,7 +45,7 @@
     "decoded_peak_dbfs": -11.31,
     "decoded_rms_dbfs": -28.15,
     "source_sha256": "65fb2ef0dcb2a3c65615fe8c5c953d9d8e3ad8b608ada524719a6260a11c74ce",
-    "sha256": "b4a9c59ee7c75905701304334f0a67b5c5b8f89cc33d6b7937b08c20f6d12894"
+    "sha256": "cb8946305187132c92df6421bfe2c57da9745bea12a95fd12966fd0bcc4adec1"
   },
   {
     "name": "chicken",
@@ -61,7 +61,7 @@
     "decoded_peak_dbfs": -12.83,
     "decoded_rms_dbfs": -31.86,
     "source_sha256": "87a8ccca6bcef8705e9ac4c531da37cbaa73174578752d6885c8567a83360470",
-    "sha256": "3d81f1d1980308aebcda6e25b51a9c289cf1b992bf1e9e628cdf7832c0b5eea9"
+    "sha256": "070d18b4d75f030fa7f6314bd50a1153a39d275cbe3fcd8917de5d1cd12ae4e5"
   },
   {
     "name": "cow",
@@ -74,10 +74,10 @@
     "largest_packet_bytes": 180,
     "largest_header_packet_bytes": 555,
     "decoded_frames": 57600,
-    "decoded_peak_dbfs": -11.24,
-    "decoded_rms_dbfs": -25.42,
+    "decoded_peak_dbfs": -11.02,
+    "decoded_rms_dbfs": -25.4,
     "source_sha256": "9cdedd1f14a46e5792e3a55860c99485ee4c07b2551a66b264f78de947505abe",
-    "sha256": "8f71175703b6b6ed6f27be2ee46b104fbf8aafbc7f9885736885539d8a3b4a89"
+    "sha256": "5f6c7cd26ace74a9b0fdf07d66d4cbea96fd32dea55581d554326b8e8e6e7143"
   },
   {
     "name": "sheep",
@@ -93,6 +93,6 @@
     "decoded_peak_dbfs": -7.53,
     "decoded_rms_dbfs": -27.16,
     "source_sha256": "39a860c19bac0bf5c721174f5d2a692c77b8157fa0be2225ccf4a05aa57667c9",
-    "sha256": "ac3a3ab660d21b7548b47c4649235eb07910091106eeba2daad790270c0f82b1"
+    "sha256": "d4e484086f7cf3f395541de021d70bf2aaadf9c26fa14a7b7f901eec40cfccc4"
   }
 ]

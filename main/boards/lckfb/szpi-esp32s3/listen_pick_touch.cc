@@ -83,6 +83,7 @@ void ListenPickTouch::Initialize() {
     auto layer = lv_layer_top();
     entry_ = Button(layer, label_, entry_x_, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
+    UpdateEntryPosition();
     lv_obj_add_event_cb(
         entry_,
         [](lv_event_t* event) {
@@ -202,7 +203,9 @@ void ListenPickTouch::Initialize() {
     lv_timer_create(
         [](lv_timer_t* timer) {
             auto self = static_cast<ListenPickTouch*>(lv_timer_get_user_data(timer));
-            if (self->visible_.load() && !self->poll_pending_.exchange(true)) {
+            if (!self->visible_.load()) {
+                self->UpdateEntryPosition();
+            } else if (!self->poll_pending_.exchange(true)) {
                 Application::GetInstance().Schedule([self]() {
                     self->Poll();
                     self->poll_pending_.store(false);
@@ -210,6 +213,14 @@ void ListenPickTouch::Initialize() {
             }
         },
         100, this);
+}
+
+void ListenPickTouch::UpdateEntryPosition() {
+    if (!entry_)
+        return;
+    const int y = display_->GetTopBarBottom() + 4;
+    if (lv_obj_get_y(entry_) != y)
+        lv_obj_set_y(entry_, y);
 }
 
 void ListenPickTouch::Enter() {
@@ -252,6 +263,7 @@ void ListenPickTouch::Exit() {
     ClearBounce();
     visible_.store(false);
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_HIDDEN);
+    UpdateEntryPosition();
     lv_obj_remove_flag(entry_, LV_OBJ_FLAG_HIDDEN);
     Application::GetInstance().EndLocalInteraction();
 }

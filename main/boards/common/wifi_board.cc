@@ -1,4 +1,5 @@
 #include "wifi_board.h"
+#include "controlled_trial.h"
 
 #include "display.h"
 #include "application.h"
@@ -50,6 +51,10 @@ std::string WifiBoard::GetBoardType() {
 }
 
 void WifiBoard::StartNetwork() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     auto& wifi_manager = WifiManager::GetInstance();
 
     // Initialize WiFi manager
@@ -98,6 +103,10 @@ void WifiBoard::StartNetwork() {
 }
 
 void WifiBoard::TryWifiConnect() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     auto& ssid_manager = SsidManager::GetInstance();
     bool have_ssid = !ssid_manager.GetSsidList().empty();
 
@@ -160,6 +169,10 @@ void WifiBoard::SetNetworkEventCallback(NetworkEventCallback callback) {
 }
 
 void WifiBoard::OnWifiConnectTimeout(void* arg) {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     auto* board = static_cast<WifiBoard*>(arg);
     ESP_LOGW(TAG, "WiFi connection timeout, entering config mode");
 
@@ -168,6 +181,10 @@ void WifiBoard::OnWifiConnectTimeout(void* arg) {
 }
 
 void WifiBoard::StartWifiConfigMode() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     in_config_mode_ = true;
     // Transition to wifi configuring state
     Application::GetInstance().SetDeviceState(kDeviceStateWifiConfiguring);
@@ -193,6 +210,10 @@ void WifiBoard::StartWifiConfigMode() {
 }
 
 void WifiBoard::EnterWifiConfigMode() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     ESP_LOGI(TAG, "EnterWifiConfigMode called");
     GetDisplay()->ShowNotification(Lang::Strings::ENTERING_WIFI_CONFIG_MODE);
 
@@ -244,6 +265,10 @@ NetworkInterface* WifiBoard::GetNetwork() {
 }
 
 const char* WifiBoard::GetNetworkStateIcon() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: offline network icon");
+        return MATERIAL_SYMBOLS_WIFI_OFF;
+    }
     auto& wifi = WifiManager::GetInstance();
 
     if (wifi.IsConfigMode()) {
@@ -280,6 +305,10 @@ std::string WifiBoard::GetBoardJson() {
 }
 
 void WifiBoard::SetPowerSaveLevel(PowerSaveLevel level) {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
+        return;
+    }
     WifiPowerSaveLevel wifi_level;
     switch (level) {
         case PowerSaveLevel::LOW_POWER:

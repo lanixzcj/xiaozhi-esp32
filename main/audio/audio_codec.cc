@@ -1,5 +1,6 @@
 #include "audio_codec.h"
 #include "board.h"
+#include "controlled_trial.h"
 #include "settings.h"
 
 #include <esp_log.h>
@@ -29,7 +30,9 @@ bool AudioCodec::InputData(std::vector<int16_t>& data) {
 void AudioCodec::Start() {
     Settings settings("audio", false);
     output_volume_ = settings.GetInt("output_volume", output_volume_);
-    if (output_volume_ <= 0) {
+    if (ControlledTrial::Enabled()) {
+        output_volume_ = ControlledTrial::ClampOutputVolume(output_volume_);
+    } else if (output_volume_ <= 0) {
         ESP_LOGW(TAG, "Output volume value (%d) is too small, setting to default (10)", output_volume_);
         output_volume_ = 10;
     }
@@ -38,6 +41,7 @@ void AudioCodec::Start() {
 }
 
 void AudioCodec::SetOutputVolume(int volume) {
+    volume = ControlledTrial::ClampOutputVolume(volume);
     output_volume_ = volume;
     ESP_LOGI(TAG, "Set output volume to %d", output_volume_);
     

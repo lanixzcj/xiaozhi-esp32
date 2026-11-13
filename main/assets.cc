@@ -2,6 +2,7 @@
 #include "application.h"
 #include "board.h"
 #include "cjson_utils.h"
+#include "controlled_trial.h"
 #include "display.h"
 #include "lvgl_theme.h"
 #if HAVE_LVGL
@@ -494,6 +495,10 @@ bool Assets::EmoteStrategy::Apply(Assets* assets, bool refresh_display_theme) {
 
 bool Assets::Download(std::string url,
                       std::function<void(int progress, size_t speed)> progress_callback) {
+    if (ControlledTrial::PreserveSharedAssets()) {
+        ESP_LOGW(TAG, "CUSTOM PROTECTION: shared assets download disabled");
+        return false;
+    }
     ESP_LOGI(TAG, "Downloading new version of assets from %s", url.c_str());
 
     auto network = Board::GetInstance().GetNetwork();

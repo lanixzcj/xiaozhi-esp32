@@ -1,0 +1,807 @@
+--- a/main/Kconfig.projbuild
++++ b/main/Kconfig.projbuild
+@@ -1,4 +1,31 @@
+ menu "Xiaozhi Assistant"
++
++config CONTROLLED_TRIAL
++    bool "Offline controlled trial (preserve shared settings and assets)"
++    depends on BOARD_TYPE_LICHUANG_DEV_S3 && !USE_EMOTE_MESSAGE_STYLE
++    default n
++    help
++        Local animal game and playback only. Skip network/provisioning, cloud
++        tools, OTA checks/upgrades, shared assets downloads and automatic OTA
++        validity confirmation. Settings opens are read-only; NVS init errors
++        stop startup without erasing NVS. This is not a flash write firewall:
++        SDK NVS initialization/bootloader internals remain outside this guard.
++
++
++config CUSTOM_FIRMWARE_PROTECTION
++    bool "Protect custom firmware from remote upgrade and automatic OTA confirmation"
++    default n
++    help
++        Keep activation/server configuration refresh enabled, but block all
++        application firmware upgrade entry points and automatic OTA validity
++        confirmation. Manual deployment/rollback remains a separate operation.
++
++config CUSTOM_PRESERVE_SHARED_ASSETS
++    bool "Keep existing shared assets (block downloads)"
++    default n
++    help
++        Apply existing assets without consuming queued download URLs. Reject
++        assets downloads, including those requested by cloud tools.
+ 
+ config OTA_URL
+     string "Default OTA URL"
+@@ -8,6 +35,7 @@
+ 
+ choice
+     prompt "Flash Assets"
++    default FLASH_NONE_ASSETS if CONTROLLED_TRIAL
+     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE
+     default FLASH_EXPRESSION_ASSETS if USE_EMOTE_MESSAGE_STYLE
+     help
+--- a/main/application.cc
++++ b/main/application.cc
+@@ -1,4 +1,5 @@
+ #include "application.h"
++#include "controlled_trial.h"
+ #include "assets.h"
+ #include "assets/lang_config.h"
+ #include "audio_codec.h"
+@@ -112,6 +113,17 @@
+ 
+     // Start the clock timer to update the status bar
+     esp_timer_start_periodic(clock_timer_handle_, 1000000);
++
++    if (ControlledTrial::Enabled()) {
++        // Applying existing assets only reads their partition. No download_url
++        // consumption and no activation/OTA object or protocol is created.
++        bool assets_ok = Assets::GetInstance().Apply();
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: existing assets apply=%s; offline local game only",
++                 assets_ok ? "ok" : "failed");
++        display->SetStatus("CONTROLLED TRIAL / OFFLINE");
++        display->SetChatMessage("system", assets_ok ? "本地试运行：点击动物" : "旧资源加载失败；停止验收");
++        return;
++    }
+ 
+     // Add MCP common tools (only once during initialization)
+     auto& mcp_server = McpServer::GetInstance();
+@@ -428,6 +440,10 @@
+ }
+ 
+ void Application::ActivationTask() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     // Create OTA object for activation process
+     ota_ = std::make_unique<Ota>();
+ 
+@@ -445,6 +461,14 @@
+ }
+ 
+ void Application::CheckAssetsVersion() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
++    if (ControlledTrial::PreserveSharedAssets()) {
++        Assets::GetInstance().Apply();
++        return;
++    }
+     // Only allow CheckAssetsVersion to be called once
+     if (assets_version_checked_) {
+         return;
+@@ -505,6 +529,10 @@
+ }
+ 
+ void Application::CheckNewVersion() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     const int MAX_RETRY = 10;
+     int retry_count = 0;
+     int retry_delay = 10;  // Initial retry delay in seconds
+@@ -555,7 +583,7 @@
+         retry_count = 0;
+         retry_delay = 10;  // Reset retry delay
+ 
+-        if (ota_->HasNewVersion()) {
++        if (!ControlledTrial::FirmwareProtected() && ota_->HasNewVersion()) {
+             if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
+                 return;  // This line will never be reached after reboot
+             }
+@@ -903,18 +931,30 @@
+ }
+ 
+ void Application::ToggleChatState() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     if (!IsLocalInteractionActive()) {
+         xEventGroupSetBits(event_group_, MAIN_EVENT_TOGGLE_CHAT);
+     }
+ }
+ 
+ void Application::StartListening() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     if (!IsLocalInteractionActive()) {
+         xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING);
+     }
+ }
+ 
+ void Application::StopListening() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     if (!IsLocalInteractionActive()) {
+         xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING);
+     }
+@@ -1052,6 +1092,10 @@
+ }
+ 
+ void Application::HandleWakeWordDetectedEvent() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
++        return;
++    }
+     if (IsLocalInteractionActive()) {
+         return;
+     }
+@@ -1601,6 +1645,10 @@
+ }
+ 
+ bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
++    if (ControlledTrial::FirmwareProtected()) {
++        ESP_LOGW(TAG, "CUSTOM PROTECTION: firmware upgrade disabled");
++        return false;
++    }
+     if (IsLocalInteractionActive()) {
+         return false;
+     }
+--- a/main/assets.cc
++++ b/main/assets.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "assets.h"
+ #include "application.h"
+ #include "board.h"
+@@ -494,6 +495,10 @@
+ 
+ bool Assets::Download(std::string url,
+                       std::function<void(int progress, size_t speed)> progress_callback) {
++    if (ControlledTrial::PreserveSharedAssets()) {
++        ESP_LOGW(TAG, "CUSTOM PROTECTION: shared assets download disabled");
++        return false;
++    }
+     ESP_LOGI(TAG, "Downloading new version of assets from %s", url.c_str());
+ 
+     auto network = Board::GetInstance().GetNetwork();
+--- a/main/audio/audio_codec.cc
++++ b/main/audio/audio_codec.cc
+@@ -1,4 +1,5 @@
+ #include "audio_codec.h"
++#include "controlled_trial.h"
+ #include "board.h"
+ #include "settings.h"
+ 
+@@ -29,7 +30,9 @@
+ void AudioCodec::Start() {
+     Settings settings("audio", false);
+     output_volume_ = settings.GetInt("output_volume", output_volume_);
+-    if (output_volume_ <= 0) {
++    if (ControlledTrial::Enabled()) {
++        output_volume_ = ControlledTrial::ClampOutputVolume(output_volume_);
++    } else if (output_volume_ <= 0) {
+         ESP_LOGW(TAG, "Output volume value (%d) is too small, setting to default (10)", output_volume_);
+         output_volume_ = 10;
+     }
+@@ -38,6 +41,7 @@
+ }
+ 
+ void AudioCodec::SetOutputVolume(int volume) {
++    volume = ControlledTrial::ClampOutputVolume(volume);
+     output_volume_ = volume;
+     ESP_LOGI(TAG, "Set output volume to %d", output_volume_);
+     
+--- a/main/audio/audio_service.cc
++++ b/main/audio/audio_service.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "audio_service.h"
+ #include <esp_log.h>
+ #include <cstring>
+@@ -698,6 +699,10 @@
+ }
+ 
+ void AudioService::EnableWakeWordDetection(bool enable) {
++    if (ControlledTrial::Enabled() && enable) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
++        return;
++    }
+     if (enable && local_interaction_active_.load()) {
+         return;
+     }
+@@ -749,6 +754,10 @@
+ }
+ 
+ void AudioService::EnableVoiceProcessing(bool enable) {
++    if (ControlledTrial::Enabled() && enable) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
++        return;
++    }
+     if (enable && local_interaction_active_.load()) {
+         return;
+     }
+@@ -777,6 +786,10 @@
+ }
+ 
+ void AudioService::EnableAudioTesting(bool enable) {
++    if (ControlledTrial::Enabled() && enable) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
++        return;
++    }
+     if (enable && local_interaction_active_.load()) {
+         return;
+     }
+--- a/main/audio/codecs/box_audio_codec.cc
++++ b/main/audio/codecs/box_audio_codec.cc
+@@ -1,4 +1,5 @@
+ #include "box_audio_codec.h"
++#include "controlled_trial.h"
+ 
+ #include <esp_log.h>
+ #include <driver/i2c_master.h>
+@@ -186,6 +187,8 @@
+ }
+ 
+ void BoxAudioCodec::SetOutputVolume(int volume) {
++    // Clamp before the hardware call, not only in the base-class setter.
++    volume = ControlledTrial::ClampOutputVolume(volume);
+     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, volume));
+     AudioCodec::SetOutputVolume(volume);
+ }
+--- a/main/boards/common/system_reset.cc
++++ b/main/boards/common/system_reset.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "system_reset.h"
+ 
+ #include <esp_log.h>
+@@ -37,6 +38,10 @@
+ }
+ 
+ void SystemReset::ResetNvsFlash() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: NVS reset disabled");
++        return;
++    }
+     ESP_LOGI(TAG, "Resetting NVS flash");
+     esp_err_t ret = nvs_flash_erase();
+     if (ret != ESP_OK) {
+@@ -49,6 +54,10 @@
+ }
+ 
+ void SystemReset::ResetToFactory() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: factory/otadata reset disabled");
++        return;
++    }
+     ESP_LOGI(TAG, "Resetting to factory");
+     // Erase otadata partition
+     const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, NULL);
+--- a/main/boards/common/wifi_board.cc
++++ b/main/boards/common/wifi_board.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "wifi_board.h"
+ 
+ #include "display.h"
+@@ -50,6 +51,10 @@
+ }
+ 
+ void WifiBoard::StartNetwork() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     auto& wifi_manager = WifiManager::GetInstance();
+ 
+     // Initialize WiFi manager
+@@ -98,6 +103,10 @@
+ }
+ 
+ void WifiBoard::TryWifiConnect() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     auto& ssid_manager = SsidManager::GetInstance();
+     bool have_ssid = !ssid_manager.GetSsidList().empty();
+ 
+@@ -160,6 +169,10 @@
+ }
+ 
+ void WifiBoard::OnWifiConnectTimeout(void* arg) {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     auto* board = static_cast<WifiBoard*>(arg);
+     ESP_LOGW(TAG, "WiFi connection timeout, entering config mode");
+ 
+@@ -168,6 +181,10 @@
+ }
+ 
+ void WifiBoard::StartWifiConfigMode() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     in_config_mode_ = true;
+     // Transition to wifi configuring state
+     Application::GetInstance().SetDeviceState(kDeviceStateWifiConfiguring);
+@@ -193,6 +210,10 @@
+ }
+ 
+ void WifiBoard::EnterWifiConfigMode() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     ESP_LOGI(TAG, "EnterWifiConfigMode called");
+     GetDisplay()->ShowNotification(Lang::Strings::ENTERING_WIFI_CONFIG_MODE);
+ 
+@@ -244,6 +265,10 @@
+ }
+ 
+ const char* WifiBoard::GetNetworkStateIcon() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: offline network icon");
++        return MATERIAL_SYMBOLS_WIFI_OFF;
++    }
+     auto& wifi = WifiManager::GetInstance();
+ 
+     if (wifi.IsConfigMode()) {
+@@ -280,6 +305,10 @@
+ }
+ 
+ void WifiBoard::SetPowerSaveLevel(PowerSaveLevel level) {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: WiFi/provisioning disabled");
++        return;
++    }
+     WifiPowerSaveLevel wifi_level;
+     switch (level) {
+         case PowerSaveLevel::LOW_POWER:
+--- a/main/boards/lckfb/szpi-esp32s3/lichuang_dev_board.cc
++++ b/main/boards/lckfb/szpi-esp32s3/lichuang_dev_board.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "animal_touch_game.h"
+ #include "application.h"
+ #include "button.h"
+@@ -67,7 +68,7 @@
+     Button boot_button_;
+     Display* display_;
+     Pca9557* pca9557_;
+-    Esp32Camera* camera_;
++    Esp32Camera* camera_ = nullptr;
+     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+ #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+     AnimalTouchGame* animal_game_ = nullptr;
+@@ -264,6 +265,10 @@
+     }
+ 
+     void InitializeCamera() {
++        if (ControlledTrial::Enabled()) {
++            ESP_LOGW(TAG, "CONTROLLED TRIAL: camera disabled; game photos are built-in");
++            return;
++        }
+         // Open camera power
+         pca9557_->SetOutputState(2, 0);
+ 
+@@ -299,6 +304,10 @@
+     }
+ 
+     void InitializeTools() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: board MCP tools disabled");
++        return;
++    }
+         auto &mcp_server = McpServer::GetInstance();
+         mcp_server.AddTool("self.system.reconfigure_wifi",
+             "End this conversation and enter WiFi configuration mode.\n"
+--- /dev/null
++++ b/main/controlled_trial.h
+@@ -0,0 +1,31 @@
++#pragma once
++#include "sdkconfig.h"
++
++// One build-time switch, default off. No NVS flag can enable/disable this mode.
++namespace ControlledTrial {
++constexpr bool Enabled() {
++#if defined(CONFIG_CONTROLLED_TRIAL) && CONFIG_CONTROLLED_TRIAL
++    return true;
++#else
++    return false;
++#endif
++}
++constexpr bool FirmwareProtected() {
++#if defined(CONFIG_CUSTOM_FIRMWARE_PROTECTION) && CONFIG_CUSTOM_FIRMWARE_PROTECTION
++    return true;
++#else
++    return Enabled();
++#endif
++}
++constexpr bool PreserveSharedAssets() {
++#if defined(CONFIG_CUSTOM_PRESERVE_SHARED_ASSETS) && CONFIG_CUSTOM_PRESERVE_SHARED_ASSETS
++    return true;
++#else
++    return Enabled();
++#endif
++}
++// Logical codec volume only; this is not a calibrated sound-pressure limit.
++constexpr int ClampOutputVolume(int volume) {
++    return Enabled() ? (volume < 0 ? 0 : (volume > 5 ? 5 : volume)) : volume;
++}
++}  // namespace ControlledTrial
+--- a/main/main.cc
++++ b/main/main.cc
+@@ -8,6 +8,7 @@
+ #include <freertos/task.h>
+ 
+ #include "application.h"
++#include "controlled_trial.h"
+ 
+ #define TAG "main"
+ 
+@@ -15,13 +16,19 @@
+ {
+     // Initialize NVS flash for WiFi configuration
+     esp_err_t ret = nvs_flash_init();
+-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+-        ESP_LOGW(TAG, "Erasing NVS flash to fix corruption");
+-        ESP_ERROR_CHECK(nvs_flash_erase());
+-        ret = nvs_flash_init();
++    if (ret != ESP_OK) {
++        ESP_LOGE(TAG, "STARTUP STOP: NVS init failed (%s); NVS was not erased",
++                 esp_err_to_name(ret));
++        return;
+     }
+-    ESP_ERROR_CHECK(ret);
+ 
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: offline; settings read-only; no OTA validity confirmation");
++    }
++
++    if (!ControlledTrial::Enabled() && ControlledTrial::FirmwareProtected()) {
++        ESP_LOGW(TAG, "CUSTOM NETWORK: normal chat/game/volume; remote firmware upgrades and automatic OTA confirmation disabled");
++    }
+     // Initialize and run the application
+     auto& app = Application::GetInstance();
+     app.Initialize();
+--- a/main/mcp_server.cc
++++ b/main/mcp_server.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ /*
+  * MCP Server Implementation
+  * Reference: https://modelcontextprotocol.io/specification/2024-11-05
+@@ -327,6 +328,10 @@
+ }
+ 
+ void McpServer::AddTool(std::unique_ptr<McpTool> tool) {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: MCP tool registration disabled");
++        return;
++    }
+     // Prevent adding duplicate tools
+     if (std::find_if(tools_.begin(), tools_.end(), [&tool](const auto& existing) {
+             return existing->name() == tool->name();
+--- a/main/ota.cc
++++ b/main/ota.cc
+@@ -1,3 +1,4 @@
++#include "controlled_trial.h"
+ #include "ota.h"
+ #include "system_info.h"
+ #include "settings.h"
+@@ -85,6 +86,10 @@
+  * Specification: https://ccnphfhqs21z.feishu.cn/wiki/FjW6wZmisimNBBkov6OcmfvknVd
+  */
+ NetworkResult<> Ota::CheckVersion() {
++    if (ControlledTrial::Enabled()) {
++        ESP_LOGW(TAG, "CONTROLLED TRIAL: OTA check/config refresh disabled");
++        return std::unexpected(NetworkError::InvalidArgument());
++    }
+     auto& board = Board::GetInstance();
+     auto app_desc = esp_app_get_description();
+ 
+@@ -258,6 +263,10 @@
+ }
+ 
+ void Ota::MarkCurrentVersionValid() {
++    if (ControlledTrial::FirmwareProtected()) {
++        ESP_LOGW(TAG, "CUSTOM PROTECTION: automatic OTA validity confirmation disabled");
++        return;
++    }
+     auto partition = esp_ota_get_running_partition();
+     if (strcmp(partition->label, "factory") == 0) {
+         ESP_LOGI(TAG, "Running from factory partition, skipping");
+@@ -278,6 +287,10 @@
+ }
+ 
+ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback) {
++    if (ControlledTrial::FirmwareProtected()) {
++        ESP_LOGW(TAG, "CUSTOM PROTECTION: OTA writes and boot selection disabled");
++        return false;
++    }
+     ESP_LOGI(TAG, "Upgrading firmware from %s", firmware_url.c_str());
+     esp_ota_handle_t update_handle = 0;
+     auto update_partition = esp_ota_get_next_update_partition(NULL);
+--- a/main/settings.cc
++++ b/main/settings.cc
+@@ -1,4 +1,5 @@
+ #include "settings.h"
++#include "controlled_trial.h"
+ 
+ #include <esp_log.h>
+ #include <nvs_flash.h>
+@@ -6,6 +7,10 @@
+ #define TAG "Settings"
+ 
+ Settings::Settings(const std::string& ns, bool read_write) : ns_(ns), read_write_(read_write) {
++    // Cover every caller, including constructors, UI callbacks and timers.
++    if (ControlledTrial::Enabled()) {
++        read_write_ = false;
++    }
+     nvs_open(ns.c_str(), read_write_ ? NVS_READWRITE : NVS_READONLY, &nvs_handle_);
+ }
+ 
+--- a/scripts/tests/test_assets.py
++++ b/scripts/tests/test_assets.py
+@@ -49,6 +49,7 @@
+             cjson_libs = [str(cjson_object), "-lm"]
+ 
+         stubs = {
++            "sdkconfig.h": "#pragma once\n",
+             "host_state.h": r'''
+                 #pragma once
+                 #include <cassert>
+--- /dev/null
++++ b/scripts/tests/test_controlled_trial.py
+@@ -0,0 +1,86 @@
++"""Real entry/settings compilation with fake NVS; never touches a device."""
++import pathlib, subprocess, tempfile, unittest
++ROOT=pathlib.Path(__file__).resolve().parents[2]
++class ControlledTrialTests(unittest.TestCase):
++ def test_fault_injection(self):
++  with tempfile.TemporaryDirectory() as tmp:
++   d=pathlib.Path(tmp)
++   files={
++    'sdkconfig.h':'#pragma once\n',
++    'esp_err.h':'''#pragma once
++#include <cassert>
++using esp_err_t=int;
++constexpr int ESP_OK=0,ESP_ERR_NVS_NO_FREE_PAGES=1,ESP_ERR_NVS_NEW_VERSION_FOUND=2,ESP_ERR_NVS_NOT_FOUND=3;
++inline const char* esp_err_to_name(int){return "fault";}
++#define ESP_ERROR_CHECK(x) assert((x)==0)
++''',
++    'esp_log.h':'#pragma once\n#define ESP_LOGW(...) ((void)0)\n#define ESP_LOGI(...) ((void)0)\n#define ESP_LOGE(...) ((void)0)\n',
++    'nvs.h':'''#pragma once
++#include "esp_err.h"
++#include <cstdint>
++#include <cstddef>
++#include <cstring>
++using nvs_handle_t=unsigned;
++constexpr int NVS_READONLY=0,NVS_READWRITE=1;
++inline int result=0,inits=0,erases=0,writes=0,commits=0,mode=-1,closes=0;
++inline bool missing=false;
++inline int nvs_open(const char*,int m,unsigned*h){mode=m;*h=missing?0:7;return missing?3:0;}
++inline int nvs_commit(unsigned){++commits;return 0;}
++inline void nvs_close(unsigned){++closes;}
++inline int nvs_set_str(unsigned,const char*,const char*){++writes;return 0;}
++inline int nvs_set_i32(unsigned,const char*,int32_t){++writes;return 0;}
++inline int nvs_set_u8(unsigned,const char*,uint8_t){++writes;return 0;}
++inline int nvs_erase_key(unsigned,const char*){++writes;return 0;}
++inline int nvs_erase_all(unsigned){++writes;return 0;}
++inline int nvs_get_str(unsigned,const char*,char*p,size_t*n){if(p)std::memcpy(p,"saved",6);*n=6;return 0;}
++inline int nvs_get_i32(unsigned,const char*,int32_t*v){*v=42;return 0;}
++inline int nvs_get_u8(unsigned,const char*,uint8_t*v){*v=1;return 0;}
++''',
++    'nvs_flash.h':'#pragma once\n#include "nvs.h"\ninline int nvs_flash_init(){return ++inits==1?result:0;}\ninline int nvs_flash_erase(){++erases;return 0;}\n',
++    'application.h':'#pragma once\ninline int app_inits=0,runs=0;\nclass Application{public:static Application& GetInstance(){static Application a;return a;}void Initialize(){++app_inits;}void Run(){++runs;}};\n',
++    'driver/gpio.h':'','esp_event.h':'','freertos/FreeRTOS.h':'','freertos/task.h':''}
++   for n,s in files.items():
++    p=d/n;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(s)
++   for n in ['main.cc','settings.cc','settings.h','controlled_trial.h']:(d/n).write_text((ROOT/'main'/n).read_text())
++   (d/'test.cc').write_text(r'''
++#include "settings.h"
++#include "controlled_trial.h"
++#include "application.h"
++#include <cstdlib>
++extern "C" void app_main();
++int main(int argc,char**argv){
++ bool t=ControlledTrial::Enabled();result=argc>1?std::atoi(argv[1]):0;app_main();
++ if(result){assert(app_inits==0&&runs==0&&erases==0&&inits==1);}
++ else{assert(app_inits==1&&runs==1&&erases==0);}
++ {Settings s("test",true);assert(mode==(t?NVS_READONLY:NVS_READWRITE));
++ assert(s.GetString("s")=="saved"&&s.GetInt("i")==42&&s.GetBool("b"));
++ s.SetString("s","new");s.SetInt("i",2);s.SetBool("b",false);s.EraseKey("x");s.EraseAll();}
++ assert(writes==(t?0:5)&&commits==(t?0:1)&&closes==1);
++ if(t){missing=true;Settings a("missing",true);assert(a.GetString("x","fallback")=="fallback"&&a.GetInt("x",17)==17);a.SetInt("x",4);assert(writes==0);}
++}
++''')
++   for t in [False,True]:
++    b=d/('trial' if t else 'normal')
++    cmd=['clang++','-std=c++17','-Wall','-Wextra','-Werror',f'-I{d}']+(['-DCONFIG_CONTROLLED_TRIAL=1'] if t else [])
++    p=subprocess.run(cmd+[str(d/'main.cc'),str(d/'settings.cc'),str(d/'test.cc'),'-o',str(b)],capture_output=True,text=True)
++    self.assertEqual(p.returncode,0,p.stderr)
++    for status in [0,1,2,99]:subprocess.run([str(b),str(status)],check=True,capture_output=True)
++ def test_guard_precedes_original_body(self):
++  cases={
++   'ota.cc':['NetworkResult<> Ota::CheckVersion() {','void Ota::MarkCurrentVersionValid() {','bool Ota::Upgrade('],
++   'assets.cc':['bool Assets::Download('],
++   'boards/common/wifi_board.cc':['void WifiBoard::StartNetwork() {','void WifiBoard::TryWifiConnect() {','void WifiBoard::OnWifiConnectTimeout(','void WifiBoard::StartWifiConfigMode() {','void WifiBoard::EnterWifiConfigMode() {','void WifiBoard::SetPowerSaveLevel('],
++   'boards/common/system_reset.cc':['void SystemReset::ResetNvsFlash() {','void SystemReset::ResetToFactory() {'],
++   'application.cc':['void Application::ActivationTask() {','void Application::CheckAssetsVersion() {','void Application::CheckNewVersion() {','bool Application::UpgradeFirmware('],
++   'mcp_server.cc':['void McpServer::AddTool(std::unique_ptr<McpTool> tool) {'],
++   'boards/lckfb/szpi-esp32s3/lichuang_dev_board.cc':['void InitializeTools() {']}
++  for path,ss in cases.items():
++   source=(ROOT/'main'/path).read_text()
++   for signature in ss:
++    with self.subTest(path=path,signature=signature):
++     body=source.split(signature,1)[1]
++     if not signature.endswith('{'):body=body.split('{',1)[1]
++     self.assertTrue(body.lstrip().startswith(('if (ControlledTrial::Enabled()) {', 'if (ControlledTrial::FirmwareProtected()) {', 'if (ControlledTrial::PreserveSharedAssets()) {')));self.assertIn('return',body.split('}',1)[0])
++  s=(ROOT/'main/Kconfig.projbuild').read_text().split('config CONTROLLED_TRIAL',1)[1].split('config OTA_URL',1)[0]
++  self.assertIn('default n',s);self.assertIn('BOARD_TYPE_LICHUANG_DEV_S3 && !USE_EMOTE_MESSAGE_STYLE',s)
++if __name__=='__main__':unittest.main()
+--- /dev/null
++++ b/scripts/tests/test_trial_gif_memory.py
+@@ -0,0 +1,54 @@
++"""Actual firmware gifdec.c, synthetic valid GIF87a/89a; no private assets."""
++from pathlib import Path
++import subprocess,tempfile,json
++root=Path(__file__).resolve().parents[2]
++with tempfile.TemporaryDirectory() as tmp:
++ d=Path(tmp)
++ (d/'esp_log.h').write_text('#pragma once\n#define ESP_LOGW(...) ((void)0)\n#define ESP_LOGE(...) ((void)0)\n')
++ (d/'lvgl.h').write_text('''#pragma once
++#include <stdlib.h>
++#include <stdint.h>
++#include <stdbool.h>
++#include <limits.h>
++#include <assert.h>
++#define LV_USE_DRAW_SW_ASM 0
++#define LV_DRAW_SW_ASM_HELIUM 99
++#ifndef LV_GIF_CACHE_DECODE_DATA
++#define LV_GIF_CACHE_DECODE_DATA 0
++#endif
++#define LV_FS_SEEK_SET 0
++#define LV_FS_SEEK_CUR 1
++#define LV_FS_MODE_RD 0
++#define LV_FS_RES_OK 0
++#define LV_ASSERT_NULL(x) assert(x)
++typedef struct {int unused;} lv_fs_file_t;
++typedef int lv_fs_res_t;
++extern size_t live,peak;
++static inline void* lv_malloc(size_t n){size_t*p=malloc(n+sizeof(size_t));if(!p)return NULL;*p=n;live+=n;if(live>peak)peak=live;return p+1;}
++static inline void lv_free(void*p){if(p){size_t*q=(size_t*)p-1;live-=*q;free(q);}}
++static inline void* lv_realloc(void*p,size_t n){if(!p)return lv_malloc(n);size_t*q=(size_t*)p-1;size_t old=*q;q=realloc(q,n+sizeof(size_t));if(!q)return NULL;*q=n;live=live-old+n;if(live>peak)peak=live;return q+1;}
++static inline int lv_fs_open(lv_fs_file_t*f,const void*p,int m){(void)f;(void)p;(void)m;abort();}
++static inline void lv_fs_read(lv_fs_file_t*f,void*p,size_t n,void*x){(void)f;(void)p;(void)n;(void)x;abort();}
++static inline void lv_fs_seek(lv_fs_file_t*f,size_t p,int k){(void)f;(void)p;(void)k;abort();}
++static inline void lv_fs_tell(lv_fs_file_t*f,uint32_t*p){(void)f;(void)p;abort();}
++static inline void lv_fs_close(lv_fs_file_t*f){(void)f;abort();}
++''')
++ (d/'test.c').write_text(r'''
++#include "gifdec.h"
++#include <assert.h>
++#include <stdio.h>
++size_t live=0,peak=0;
++int main(){
++ unsigned char data[]={ 'G','I','F','8','9','a',1,0,1,0,0x80,0,0,0,0,0,255,255,255,0x2c,0,0,0,0,1,0,1,0,0,2,2,0x44,0x01,0,0x3b };
++ for(int i=0;i<300;i++){
++  data[4]=(i%2)?'7':'9';gd_GIF*g=gd_open_gif_data(data);assert(g&&g->width==1&&g->height==1);
++  assert(gd_get_frame(g)==1);gd_render_frame(g,g->canvas);assert(gd_get_frame(g)==0);gd_rewind(g);assert(gd_get_frame(g)==1);gd_close_gif(g);assert(live==0);
++ }
++ printf("{\"cycles\":300,\"peak_bytes\":%zu,\"retained_bytes\":%zu}\n",peak,live);
++}
++''')
++ for cache in [0,1]:
++  b=d/f'gif-{cache}'
++  subprocess.run(['clang','-std=c11','-fsanitize=address,undefined','-g',f'-DLV_GIF_CACHE_DECODE_DATA={cache}',f'-I{d}',f'-I{root}/main/display/lvgl_display/gif',str(root/'main/display/lvgl_display/gif/gifdec.c'),str(d/'test.c'),'-o',str(b)],check=True,capture_output=True,text=True)
++  p=subprocess.run([str(b)],check=True,capture_output=True,text=True)
++  print('cache',cache,p.stdout.strip())
+--- /dev/null
++++ b/scripts/tests/test_trial_volume.py
+@@ -0,0 +1,40 @@
++"""Compile actual codec startup/setters with hardware/NVS doubles, no device."""
++from pathlib import Path
++import tempfile,subprocess,unittest
++ROOT=Path(__file__).resolve().parents[2]
++class TrialVolumeTest(unittest.TestCase):
++ def test_startup_and_hardware_setter_limits_with_default_unchanged(self):
++  with tempfile.TemporaryDirectory() as tmp:
++   d=Path(tmp)
++   for name,data in {'sdkconfig.h':'#pragma once\n','board.h':'#pragma once\n','esp_log.h':'#pragma once\n#define ESP_LOGI(...) ((void)0)\n#define ESP_LOGW(...) ((void)0)\n','driver/i2s_common.h':'#pragma once\n','settings.h':'#pragma once\n#include <string>\ninline int saved_volume=70;\nclass Settings{public:Settings(const char*,bool){} int GetInt(const char*,int){return saved_volume;}void SetInt(const char*,int){}};\n','audio_codec.h':'''#pragma once
++#include <vector>
++#include <cstdint>
++class AudioCodec {public:AudioCodec();virtual ~AudioCodec();void Start();void OutputData(std::vector<int16_t>&);bool InputData(std::vector<int16_t>&);void SetOutputVolume(int);void SetInputGain(float);void EnableInput(bool);void EnableOutput(bool);int output_volume(){return output_volume_;}protected:int output_volume_=70;float input_gain_=0;bool input_enabled_=false,output_enabled_=false;int Write(const int16_t*,int){return 0;}int Read(int16_t*,int){return 0;}};
++'''}.items():
++    p=d/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(data)
++   (d/'controlled_trial.h').write_text((ROOT/'main/controlled_trial.h').read_text())
++   (d/'codec.cc').write_text((ROOT/'main/audio/audio_codec.cc').read_text())
++   box=(ROOT/'main/audio/codecs/box_audio_codec.cc').read_text().split('void BoxAudioCodec::SetOutputVolume(int volume) {',1)[1].split('\n}',1)[0]
++   (d/'test.cc').write_text('''#include "audio_codec.h"
++#include "controlled_trial.h"
++#include "settings.h"
++#include <cassert>
++inline int hardware_volume=-99;
++inline int esp_codec_dev_set_out_vol(void*,int v){hardware_volume=v;return 0;}
++#define ESP_ERROR_CHECK(x) assert((x)==0)
++class BoxAudioCodec:public AudioCodec {public:void* output_dev_=nullptr;void SetOutputVolume(int);};
++void BoxAudioCodec::SetOutputVolume(int volume) {'''+box+'''
++}
++int main(){for(int value:{-9,0,1,3,5,6,70,100}){
++ saved_volume=value;BoxAudioCodec c;c.Start();
++ int expect=ControlledTrial::Enabled()?ControlledTrial::ClampOutputVolume(value):(value<=0?10:value);
++ assert(c.output_volume()==expect);
++ c.SetOutputVolume(value);expect=ControlledTrial::ClampOutputVolume(value);
++ assert(c.output_volume()==expect&&hardware_volume==expect);
++}}
++''')
++   for trial in [0,1]:
++    binary=d/f'volume-{trial}'
++    p=subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror',f'-DCONFIG_CONTROLLED_TRIAL={trial}',f'-I{d}',str(d/'codec.cc'),str(d/'test.cc'),'-o',str(binary)],text=True,capture_output=True)
++    self.assertEqual(p.returncode,0,p.stderr);subprocess.run([str(binary)],check=True)
++if __name__=='__main__':unittest.main()
+--- /dev/null
++++ b/sdkconfig.controlled-trial.defaults
+@@ -0,0 +1,6 @@
++# Apply on top of the packaged SDK config in a clean build workspace.
++CONFIG_CONTROLLED_TRIAL=y
++CONFIG_FLASH_NONE_ASSETS=y
++# CONFIG_FLASH_DEFAULT_ASSETS is not set
++# CONFIG_FLASH_CUSTOM_ASSETS is not set
++# CONFIG_FLASH_EXPRESSION_ASSETS is not set
+--- /dev/null
++++ b/scripts/tests/test_custom_protection.py
+@@ -0,0 +1,30 @@
++"""Compile policy combinations and verify guarded entry ordering; no device access."""
++import pathlib, subprocess, tempfile, unittest
++ROOT = pathlib.Path(__file__).resolve().parents[2]
++class CustomProtectionTests(unittest.TestCase):
++ def test_independent_flags_default_and_normal_volume(self):
++  with tempfile.TemporaryDirectory() as tmp:
++   d=pathlib.Path(tmp); (d/'sdkconfig.h').write_text('')
++   (d/'controlled_trial.h').write_text((ROOT/'main/controlled_trial.h').read_text())
++   (d/'test.cc').write_text('#include "controlled_trial.h"\n#include <cassert>\nint main(){assert(ControlledTrial::Enabled()==EXPECTED_TRIAL);assert(ControlledTrial::FirmwareProtected()==EXPECTED_FIRMWARE);assert(ControlledTrial::PreserveSharedAssets()==EXPECTED_ASSETS);assert(ControlledTrial::ClampOutputVolume(70)==(EXPECTED_TRIAL?5:70));}\n')
++   for trial, firmware, assets in [(0,0,0),(0,1,0),(0,0,1),(0,1,1),(1,0,0)]:
++    flags=[f'-DEXPECTED_TRIAL={trial}',f'-DEXPECTED_FIRMWARE={trial or firmware}',f'-DEXPECTED_ASSETS={trial or assets}']
++    for key,value in [('CONTROLLED_TRIAL',trial),('CUSTOM_FIRMWARE_PROTECTION',firmware),('CUSTOM_PRESERVE_SHARED_ASSETS',assets)]:
++     if value: flags.append(f'-DCONFIG_{key}=1')
++    subprocess.run(['clang++','-std=c++17',f'-I{d}',*flags,str(d/'test.cc'),'-o',str(d/'test')],check=True,capture_output=True)
++    subprocess.run([str(d/'test')],check=True,capture_output=True)
++ def test_network_refresh_and_guards_remain_separate(self):
++  app=(ROOT/'main/application.cc').read_text()
++  body=app.split('void Application::CheckAssetsVersion()',1)[1].split('void Application::CheckNewVersion()',1)[0]
++  self.assertLess(body.index('PreserveSharedAssets()'),body.index('Settings settings'))
++  self.assertLess(body.index('Assets::GetInstance().Apply()'),body.index('settings.EraseKey'))
++  self.assertIn('!ControlledTrial::FirmwareProtected() && ota_->HasNewVersion()',app)
++  ota=(ROOT/'main/ota.cc').read_text()
++  check=ota.split('NetworkResult<> Ota::CheckVersion()',1)[1].split('void Ota::MarkCurrentVersionValid()',1)[0]
++  self.assertIn('if (ControlledTrial::Enabled())',check)
++  self.assertNotIn('if (ControlledTrial::FirmwareProtected())',check)
++  self.assertIn('Settings settings("mqtt", true)',check)
++  for sig in ['void Ota::MarkCurrentVersionValid()', 'bool Ota::Upgrade(']:
++   self.assertIn('if (ControlledTrial::FirmwareProtected())',ota.split(sig,1)[1].split('return',1)[0])
++  self.assertIn('if (ControlledTrial::PreserveSharedAssets())',(ROOT/'main/assets.cc').read_text().split('bool Assets::Download(',1)[1].split('return',1)[0])
++if __name__=='__main__':unittest.main()

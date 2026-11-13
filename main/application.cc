@@ -4,6 +4,7 @@
 #include "audio_codec.h"
 #include "board.h"
 #include "cjson_utils.h"
+#include "controlled_trial.h"
 #include "display.h"
 #include "mcp_server.h"
 #include "mqtt_protocol.h"
@@ -112,6 +113,18 @@ void Application::Initialize() {
 
     // Start the clock timer to update the status bar
     esp_timer_start_periodic(clock_timer_handle_, 1000000);
+
+    if (ControlledTrial::Enabled()) {
+        // Applying existing assets only reads their partition. No download_url
+        // consumption and no activation/OTA object or protocol is created.
+        bool assets_ok = Assets::GetInstance().Apply();
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: existing assets apply=%s; offline local game only",
+                 assets_ok ? "ok" : "failed");
+        display->SetStatus("CONTROLLED TRIAL / OFFLINE");
+        display->SetChatMessage("system",
+                                assets_ok ? "本地试运行：点击动物" : "旧资源加载失败；停止验收");
+        return;
+    }
 
     // Add MCP common tools (only once during initialization)
     auto& mcp_server = McpServer::GetInstance();
@@ -428,6 +441,10 @@ void Application::HandleActivationDoneEvent() {
 }
 
 void Application::ActivationTask() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     // Create OTA object for activation process
     ota_ = std::make_unique<Ota>();
 
@@ -445,6 +462,14 @@ void Application::ActivationTask() {
 }
 
 void Application::CheckAssetsVersion() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
+    if (ControlledTrial::PreserveSharedAssets()) {
+        Assets::GetInstance().Apply();
+        return;
+    }
     // Only allow CheckAssetsVersion to be called once
     if (assets_version_checked_) {
         return;
@@ -505,6 +530,10 @@ void Application::CheckAssetsVersion() {
 }
 
 void Application::CheckNewVersion() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     const int MAX_RETRY = 10;
     int retry_count = 0;
     int retry_delay = 10;  // Initial retry delay in seconds
@@ -555,7 +584,7 @@ void Application::CheckNewVersion() {
         retry_count = 0;
         retry_delay = 10;  // Reset retry delay
 
-        if (ota_->HasNewVersion()) {
+        if (!ControlledTrial::FirmwareProtected() && ota_->HasNewVersion()) {
             if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
                 return;  // This line will never be reached after reboot
             }
@@ -908,18 +937,30 @@ void Application::DismissAlert() {
 }
 
 void Application::ToggleChatState() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     if (!IsLocalInteractionActive()) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_TOGGLE_CHAT);
     }
 }
 
 void Application::StartListening() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     if (!IsLocalInteractionActive()) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING);
     }
 }
 
 void Application::StopListening() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     if (!IsLocalInteractionActive()) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING);
     }
@@ -1057,6 +1098,10 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: network/activation/chat disabled");
+        return;
+    }
     if (IsLocalInteractionActive()) {
         return;
     }
@@ -1606,6 +1651,10 @@ void Application::Reboot() {
 }
 
 bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+    if (ControlledTrial::FirmwareProtected()) {
+        ESP_LOGW(TAG, "CUSTOM PROTECTION: firmware upgrade disabled");
+        return false;
+    }
     if (IsLocalInteractionActive()) {
         return false;
     }

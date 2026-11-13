@@ -1,6 +1,7 @@
 #include "audio_service.h"
 #include <esp_log.h>
 #include <cstring>
+#include "controlled_trial.h"
 
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)                                        \
     (esp_ae_rate_cvt_cfg_t) {                                                                \
@@ -698,6 +699,10 @@ std::unique_ptr<AudioStreamPacket> AudioService::PopWakeWordPacket() {
 }
 
 void AudioService::EnableWakeWordDetection(bool enable) {
+    if (ControlledTrial::Enabled() && enable) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
+        return;
+    }
     if (enable && local_interaction_active_.load()) {
         return;
     }
@@ -749,6 +754,10 @@ void AudioService::ReleaseWakeWordResources() {
 }
 
 void AudioService::EnableVoiceProcessing(bool enable) {
+    if (ControlledTrial::Enabled() && enable) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
+        return;
+    }
     if (enable && local_interaction_active_.load()) {
         return;
     }
@@ -777,6 +786,10 @@ void AudioService::EnableVoiceProcessing(bool enable) {
 }
 
 void AudioService::EnableAudioTesting(bool enable) {
+    if (ControlledTrial::Enabled() && enable) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: microphone capture disabled");
+        return;
+    }
     if (enable && local_interaction_active_.load()) {
         return;
     }

@@ -384,6 +384,19 @@ bool LcdDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void LcdDisplay::Unlock() { lvgl_port_unlock(); }
 
+int LcdDisplay::GetTopBarBottom() const {
+    int bottom = 0;
+    for (auto bar : {top_bar_, status_bar_}) {
+        if (bar && !lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN)) {
+            lv_area_t bounds;
+            lv_obj_get_coords(bar, &bounds);
+            if (bounds.y2 + 1 > bottom)
+                bottom = bounds.y2 + 1;
+        }
+    }
+    return bottom;
+}
+
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
 void LcdDisplay::SetupUI() {
     // Prevent duplicate calls - if already called, return early

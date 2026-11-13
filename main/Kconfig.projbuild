@@ -1,5 +1,32 @@
 menu "Xiaozhi Assistant"
 
+config CONTROLLED_TRIAL
+    bool "Offline controlled trial (preserve shared settings and assets)"
+    depends on BOARD_TYPE_LICHUANG_DEV_S3 && !USE_EMOTE_MESSAGE_STYLE
+    default n
+    help
+        Local animal game and playback only. Skip network/provisioning, cloud
+        tools, OTA checks/upgrades, shared assets downloads and automatic OTA
+        validity confirmation. Settings opens are read-only; NVS init errors
+        stop startup without erasing NVS. This is not a flash write firewall:
+        SDK NVS initialization/bootloader internals remain outside this guard.
+
+
+config CUSTOM_FIRMWARE_PROTECTION
+    bool "Protect custom firmware from remote upgrade and automatic OTA confirmation"
+    default n
+    help
+        Keep activation/server configuration refresh enabled, but block all
+        application firmware upgrade entry points and automatic OTA validity
+        confirmation. Manual deployment/rollback remains a separate operation.
+
+config CUSTOM_PRESERVE_SHARED_ASSETS
+    bool "Keep existing shared assets (block downloads)"
+    default n
+    help
+        Apply existing assets without consuming queued download URLs. Reject
+        assets downloads, including those requested by cloud tools.
+
 config OTA_URL
     string "Default OTA URL"
     default "https://api.tenclass.net/xiaozhi/ota/"
@@ -8,6 +35,7 @@ config OTA_URL
 
 choice
     prompt "Flash Assets"
+    default FLASH_NONE_ASSETS if CONTROLLED_TRIAL
     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE
     default FLASH_EXPRESSION_ASSETS if USE_EMOTE_MESSAGE_STYLE
     help

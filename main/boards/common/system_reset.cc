@@ -1,4 +1,5 @@
 #include "system_reset.h"
+#include "controlled_trial.h"
 
 #include <esp_log.h>
 #include <nvs_flash.h>
@@ -37,6 +38,10 @@ void SystemReset::CheckButtons() {
 }
 
 void SystemReset::ResetNvsFlash() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: NVS reset disabled");
+        return;
+    }
     ESP_LOGI(TAG, "Resetting NVS flash");
     esp_err_t ret = nvs_flash_erase();
     if (ret != ESP_OK) {
@@ -49,6 +54,10 @@ void SystemReset::ResetNvsFlash() {
 }
 
 void SystemReset::ResetToFactory() {
+    if (ControlledTrial::Enabled()) {
+        ESP_LOGW(TAG, "CONTROLLED TRIAL: factory/otadata reset disabled");
+        return;
+    }
     ESP_LOGI(TAG, "Resetting to factory");
     // Erase otadata partition
     const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, NULL);

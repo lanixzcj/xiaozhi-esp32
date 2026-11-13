@@ -57,7 +57,7 @@ class AnimalRecordingTests(unittest.TestCase):
             [ROOT / "main/audio/demuxer/ogg_demuxer.cc"])
 
     def test_exact_approved_sources_and_separate_licenses(self):
-        expected_frames = (56880, 48926, 48000, 63600, 57600, 50276)
+        expected_frames = (50400, 50400, 48000, 63600, 57600, 50276)
         records = generator.load_provenance()
         for name, frames in zip(generator.SOUNDS, expected_frames):
             path, actual_frames, digest = generator.source_info(name, records[name])
@@ -141,7 +141,7 @@ std::string_view View(const unsigned char* data, size_t size) {
 '''
         checks = r'''
 int main() {
-    constexpr size_t counts[] = {40, 35, 34, 45, 41, 36};
+    constexpr size_t counts[] = {36, 36, 34, 45, 41, 36};
     AudioService audio;
     assert(!audio.PlayLocalInteractionSound(animal_game_assets::GetSound(0)));
     audio.local_interaction_active_ = true;
@@ -214,8 +214,8 @@ int main() {
         dlsym(library,"opus_decode"));
     auto destroy = reinterpret_cast<void (*)(OpusDecoder*)>(dlsym(library,"opus_decoder_destroy"));
     assert(create && decode && destroy);
-    constexpr size_t counts[] = {40, 35, 34, 45, 41, 36};
-    constexpr size_t source_frames[] = {56880, 48926, 48000, 63600, 57600, 50276};
+    constexpr size_t counts[] = {36, 36, 34, 45, 41, 36};
+    constexpr size_t source_frames[] = {50400, 50400, 48000, 63600, 57600, 50276};
     for (size_t i = 0; i < animal_game_assets::kSoundCount; ++i) {
         const auto clip = animal_game_assets::GetSound(i);
         for (size_t chunk : {size_t(1), size_t(17), clip.size()}) {

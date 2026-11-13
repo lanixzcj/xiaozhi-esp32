@@ -50,6 +50,7 @@ public:
     virtual void ClearChatMessages() override;
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
     virtual void SetupUI() override;
+    virtual int GetTopBarBottom() const override;
     // Add theme switching function
     virtual void SetTheme(Theme* theme) override;
 

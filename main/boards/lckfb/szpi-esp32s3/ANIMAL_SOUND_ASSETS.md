@@ -1,3 +1,28 @@
+# Animal recording update — 2026-11-14
+
+Cat and dog have been replaced at the device owner's request. The cat is
+Joseph SARDIN's [Little meow of a cat #3](https://bigsoundbank.com/little-meow-of-a-cat-3-s1473.html);
+the dog is his [Small dog barking](https://bigsoundbank.com/small-dog-barking-s0612.html),
+excerpt 3.0–4.2 seconds. Both source pages explicitly offer CC0 1.0.
+The short cat call replaces the pleading-cat recording; the dog excerpt replaces
+the previous loud close bark. These are real recordings, not synthesized calls.
+
+Replacements use high/low-pass filtering, gradual onset/ending and constant gain:
+cat -6.94 dB (80 ms onset); dog -15.92 dB (120 ms onset). Both are padded with
+silence to 2.1 seconds at mono 24 kHz PCM16. No pitch/speed changes or synthesis.
+Decoded peaks are approximately -18 dBFS. This reduces digital peaks; actual
+speaker comfort still needs user audition at the device's existing volume.
+Provenance, exact input hashes and processing are in `assets/audio/recording-provenance.json`.
+The generated encoding report and header are authoritative for this version.
+Other four recordings and their separate licenses remain unchanged.
+
+The historical measurements and credits below describe the earlier recordings;
+the current cat/dog metadata supersedes their entries. The generator encodes the
+committed, already-processed WAV inputs without further audio processing.
+This version was regenerated using FFmpeg 9.0.2 and ffprobe 6.1.1.
+
+---
+
 # Offline recorded animal sounds
 
 The six sounds in `animal_game_sounds.h` come from real animal recordings.

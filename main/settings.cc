@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "controlled_trial.h"
 
 #include <esp_log.h>
 #include <nvs_flash.h>
@@ -6,6 +7,10 @@
 #define TAG "Settings"
 
 Settings::Settings(const std::string& ns, bool read_write) : ns_(ns), read_write_(read_write) {
+    // Cover every caller, including constructors, UI callbacks and timers.
+    if (ControlledTrial::Enabled()) {
+        read_write_ = false;
+    }
     nvs_open(ns.c_str(), read_write_ ? NVS_READWRITE : NVS_READONLY, &nvs_handle_);
 }
 
