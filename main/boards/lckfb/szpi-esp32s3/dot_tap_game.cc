@@ -281,7 +281,7 @@ void DotTapGame::Initialize() {
                 });
             }
         },
-        50, this);
+        33, this);
 }
 
 void DotTapGame::UpdateEntryPosition() {
@@ -309,6 +309,8 @@ void DotTapGame::Enter() {
     session_.Start(lv_tick_get());
     shake_.Reset();
     read_failures_ = 0;
+    tilt_origin_samples_ = 0;
+    tilt_origin_sum_x_ = tilt_origin_sum_y_ = 0;
     drag_index_ = -1;
     dragged_ = false;
     suppress_tap_ = false;
@@ -407,7 +409,16 @@ void DotTapGame::Poll() {
     int pull_x = 0;
     int pull_y = 0;
     if (have_accel) {
-        DotRoll::Map(ax, ay, az, pull_x, pull_y);
+        if (tilt_origin_samples_ < 4) {
+            tilt_origin_sum_x_ += ax;
+            tilt_origin_sum_y_ += ay;
+            if (++tilt_origin_samples_ == 4) {
+                tilt_origin_x_ = int16_t(tilt_origin_sum_x_ / 4);
+                tilt_origin_y_ = int16_t(tilt_origin_sum_y_ / 4);
+            }
+        } else {
+            DotRoll::MapRelative(ax, ay, tilt_origin_x_, tilt_origin_y_, pull_x, pull_y);
+        }
     }
     if (rounds_.TimedOut(now)) {
         rounds_.Expire();
@@ -567,6 +578,8 @@ void DotTapGame::Restart() {
     session_.Start(lv_tick_get());
     shake_.Reset();
     read_failures_ = 0;
+    tilt_origin_samples_ = 0;
+    tilt_origin_sum_x_ = tilt_origin_sum_y_ = 0;
     drag_index_ = -1;
     dragged_ = false;
     suppress_tap_ = false;

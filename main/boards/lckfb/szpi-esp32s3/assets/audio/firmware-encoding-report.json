@@ -1,35 +1,35 @@
 [
   {
     "name": "cat",
-    "bytes": 7211,
+    "bytes": 7264,
     "source_frames": 50400,
     "source_seconds": 2.1,
     "ogg_seconds": 2.1065,
     "untrimmed_playback_seconds": 2.16,
     "packets": 36,
     "largest_packet_bytes": 180,
-    "largest_header_packet_bytes": 537,
+    "largest_header_packet_bytes": 590,
     "decoded_frames": 50400,
-    "decoded_peak_dbfs": -17.98,
-    "decoded_rms_dbfs": -36.3,
-    "source_sha256": "5d64f758b146d8f0a5bdc9c863305c2f1f52c134789c24d0e79fbd4cc0d73bdf",
-    "sha256": "6a918098f4c7ec36d3bc94d9395902a23189ebf52dfa2fb6138eda70d400b027"
+    "decoded_peak_dbfs": -10.5,
+    "decoded_rms_dbfs": -28.4,
+    "source_sha256": "14001ac96ee22371aa07f3a28e44b3e359020bb5ab52ee66aa82ca8a519f28f0",
+    "sha256": "cec02969f7e0de39d149022e214fff9193af5b713024284f8014db3bd2e14904"
   },
   {
     "name": "dog",
-    "bytes": 7203,
+    "bytes": 7256,
     "source_frames": 50400,
     "source_seconds": 2.1,
     "ogg_seconds": 2.1065,
     "untrimmed_playback_seconds": 2.16,
     "packets": 36,
     "largest_packet_bytes": 180,
-    "largest_header_packet_bytes": 529,
+    "largest_header_packet_bytes": 582,
     "decoded_frames": 50400,
-    "decoded_peak_dbfs": -18.1,
-    "decoded_rms_dbfs": -37.87,
-    "source_sha256": "a9abbe3bdea3ca433edb3d1dba2ba12cd680026e541507c39bf8ca532aebb1e1",
-    "sha256": "e1d5bfbcc7554e2b302663d802c99d54650df6a361d496c8662bd8531f795b0e"
+    "decoded_peak_dbfs": -10.71,
+    "decoded_rms_dbfs": -29.91,
+    "source_sha256": "77d2a5998c79022c5804b9c192f32f9930d8dd1761b6cf5609329d32e90ecfcb",
+    "sha256": "87b413acae23756732fa65573539caba6301d0b463aabe89c0ceac1b3cfbf4de"
   },
   {
     "name": "duck",

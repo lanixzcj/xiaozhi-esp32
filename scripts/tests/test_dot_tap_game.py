@@ -91,6 +91,19 @@ int main() {
  DotRoll::Map(200, 0, 8192, px, py);
  assert(px == 0);  // inside the deadzone
 
+ // The holding pose at entry is neutral, including a non-level board.
+ DotRoll::MapRelative(5000,-2000,5000,-2000,px,py);assert(px==0&&py==0);
+ DotRoll::MapRelative(6800,-2000,5000,-2000,px,py);assert(px < -200 && py==0);
+ DotRoll::MapRelative(3200,-2000,5000,-2000,px,py);assert(px > 200 && py==0);
+ DotRoll::MapRelative(5000,-200,5000,-2000,px,py);assert(py > 200 && px==0);
+ DotRoll::MapRelative(5000,-3800,5000,-2000,px,py);assert(py < -200 && px==0);
+ DotRoll gentle;gentle.NoteHome(2,128,88,true);
+ for(int i=0;i<60;++i) gentle.Step(250,0,33);
+ assert(gentle.body(2).x > 225); // ~14 degree tilt reaches near the edge
+ DotRoll reverse;reverse.NoteHome(2,128,88,true);
+ for(int i=0;i<60;++i) reverse.Step(-250,0,33);
+ assert(reverse.body(2).x < 35);
+
  DotRoll roll;
  roll.NoteHome(2, 128, 88, true);
  for (int i = 0; i < 30; ++i) roll.Step(800, 0, 50);

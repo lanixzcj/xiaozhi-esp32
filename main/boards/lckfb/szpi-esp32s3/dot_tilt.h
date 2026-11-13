@@ -16,13 +16,13 @@ public:
     static constexpr int kLsbPerG = 8192;
     static constexpr int kSignX = -1;
     static constexpr int kSignY = 1;
-    static constexpr int kDeadzoneMg = 70;
+    static constexpr int kDeadzoneMg = 35;
     static constexpr int kMaxPullMg = 1000;
-    // Pixels/s^2 at 1 g. With the spring below, ~30° gathers dots toward an edge
-    // and a level board lets them drift back to the page layout.
-    static constexpr float kGravity = 900.f;
-    static constexpr float kSpring = 6.f;
-    static constexpr float kDampPerSec = 3.5f;
+    // Pixels/s^2 at 1 g. A gentle relative tilt can reach an edge; the weaker spring
+    // lets the neutral holding pose bring them back to the page layout.
+    static constexpr float kGravity = 1200.f;
+    static constexpr float kSpring = 1.8f;
+    static constexpr float kDampPerSec = 2.8f;
     static constexpr float kBounce = 0.35f;
     static constexpr float kMaxSpeed = 420.f;
     static constexpr int kScreenW = 320;
@@ -46,6 +46,12 @@ public:
         (void)az;
         pull_x_mg = ClampPull(kSignX * MilliG(ax));
         pull_y_mg = ClampPull(kSignY * MilliG(ay));
+    }
+
+    static void MapRelative(int16_t ax, int16_t ay, int16_t neutral_x, int16_t neutral_y,
+                            int& pull_x_mg, int& pull_y_mg) {
+        pull_x_mg = ClampPull(kSignX * MilliG(int(ax) - neutral_x));
+        pull_y_mg = ClampPull(kSignY * MilliG(int(ay) - neutral_y));
     }
 
     void NoteHome(int index, float x, float y, bool alive, float size = kDot) {
@@ -126,7 +132,7 @@ public:
     static constexpr int kDots = 5;
 
 private:
-    static int MilliG(int16_t raw) { return int(raw) * 1000 / kLsbPerG; }
+    static int MilliG(int raw) { return int(raw) * 1000 / kLsbPerG; }
 
     static int ClampPull(int milli_g) {
         if (milli_g > -kDeadzoneMg && milli_g < kDeadzoneMg) {

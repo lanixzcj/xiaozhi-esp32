@@ -22,11 +22,13 @@
       "sample_rate_hz": 24000,
       "channels": 1,
       "pcm_bits": 16,
-      "gain_db": -6.9357,
-      "processing": "90 Hz high-pass, 3500 Hz low-pass; 80 ms fade-in, 150 ms fade-out; constant gain -6.9357 dB; trailing silence to 2.1 s; mono 24 kHz PCM16; no synthesis, pitch or speed changes",
+      "gain_db": 1.0643,
+      "processing": "90 Hz high-pass, 3500 Hz low-pass; 80 ms fade-in, 150 ms fade-out; constant gain -6.9357 dB; trailing silence to 2.1 s; mono 24 kHz PCM16; no synthesis, pitch or speed changes; R3 applies +8 dB clarity gain to the R2 adapted WAV",
       "wav_file": "animal-cat.wav",
-      "wav_sha256": "5d64f758b146d8f0a5bdc9c863305c2f1f52c134789c24d0e79fbd4cc0d73bdf",
-      "listening_evaluation": "User audition on actual speaker pending."
+      "wav_sha256": "14001ac96ee22371aa07f3a28e44b3e359020bb5ab52ee66aa82ca8a519f28f0",
+      "listening_evaluation": "R2 user reported cat/dog unclear; R3 increases audibility while retaining gentle filtering/fades. Device audition pending.",
+      "prior_adaptation_wav_sha256": "5d64f758b146d8f0a5bdc9c863305c2f1f52c134789c24d0e79fbd4cc0d73bdf",
+      "clarity_gain_db": 8
     }
   },
   {
@@ -52,11 +54,13 @@
       "sample_rate_hz": 24000,
       "channels": 1,
       "pcm_bits": 16,
-      "gain_db": -15.9176,
-      "processing": "150 Hz high-pass, 2200 Hz low-pass; 120 ms fade-in, 250 ms fade-out; constant gain -15.9176 dB; trailing silence to 2.1 s; mono 24 kHz PCM16; no synthesis, pitch or speed changes",
+      "gain_db": -7.9176,
+      "processing": "150 Hz high-pass, 2200 Hz low-pass; 120 ms fade-in, 250 ms fade-out; constant gain -15.9176 dB; trailing silence to 2.1 s; mono 24 kHz PCM16; no synthesis, pitch or speed changes; R3 applies +8 dB clarity gain to the R2 adapted WAV",
       "wav_file": "animal-dog.wav",
-      "wav_sha256": "a9abbe3bdea3ca433edb3d1dba2ba12cd680026e541507c39bf8ca532aebb1e1",
-      "listening_evaluation": "User audition on actual speaker pending."
+      "wav_sha256": "77d2a5998c79022c5804b9c192f32f9930d8dd1761b6cf5609329d32e90ecfcb",
+      "listening_evaluation": "R2 user reported cat/dog unclear; R3 increases audibility while retaining gentle filtering/fades. Device audition pending.",
+      "prior_adaptation_wav_sha256": "a9abbe3bdea3ca433edb3d1dba2ba12cd680026e541507c39bf8ca532aebb1e1",
+      "clarity_gain_db": 8
     }
   },
   {

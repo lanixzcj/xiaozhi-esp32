@@ -328,6 +328,19 @@ int main(int argc, char** argv) {
     game.RequestExit();
     assert(!game.IsVisible());
 
+    // Enter while holding the board at an angle. That pose must be neutral,
+    // rather than pushing every dot toward a corner before the first tap.
+    accel.on = true;
+    accel.ax = 4000;
+    accel.ay = -3000;
+    accel.az = 6500;
+    Click(entry);
+    for (int i = 0; i < 20; ++i)
+        Advance(33);
+    lv_obj_update_layout(panel);
+    assert(lv_obj_get_x(dots[2]) == 128 && lv_obj_get_y(dots[2]) == 88);
+    game.RequestExit();
+
     // Real LVGL pointer dispatch: a drag retains the pressed dot, works in all
     // four corners, stays inside the screen, and does not count as a tap.
     accel.on = false;

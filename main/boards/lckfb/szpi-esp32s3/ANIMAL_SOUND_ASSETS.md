@@ -1,3 +1,14 @@
+# R3 clarity adjustment
+
+User audition found the softened R2 cat/dog too quiet on the device.
+Both adapted WAVs now receive +8 dB constant gain, retaining the replacement
+recordings, filters and gradual onset/ending. Decoded peaks are about -10 dBFS;
+RMS levels are -28.3 dBFS (cat) and -29.9 dBFS (dog), close to the other cues.
+No global device volume or other animals are changed. Current provenance and
+encoding report supersede historical levels below. Physical audition is pending.
+
+---
+
 # Animal recording update — 2026-11-14
 
 Cat and dog have been replaced at the device owner's request. The cat is

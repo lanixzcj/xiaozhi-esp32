@@ -47,3 +47,13 @@ The mixed/custom page also advances after three taps, and a 700 ms hold always
 works, even with a working IMU. The original shake interaction remains available.
 The tap-only sequence is one yellow dot → five yellow dots → mixed colors →
 three more taps → scatter → cross → tap to restart.
+
+## R3 sensitivity and clarity
+
+User feedback on R2 still found tilt sluggish and cat/dog unclear on the speaker.
+R3 learns the initial holding pose from four valid acceleration samples, reduces
+the motion deadzone and spring pull, increases gravity response, and polls at
+33 ms. A ~14 degree relative tilt can move a central dot near an edge in two
+seconds in the host regression. Actual mounting and feel need device testing.
+Cat/dog adapted WAVs receive +8 dB gain, keeping filtering/fades and preserving
+all other cues and the global volume setting. Their decoded peaks are ~-10 dBFS.
