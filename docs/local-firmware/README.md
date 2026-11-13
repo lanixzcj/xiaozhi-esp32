@@ -74,3 +74,20 @@ require all four screen edges and reversals, and exercise upright samples throug
 the actual LVGL game timers. These checks do not prove the physical mounting or
 feel; user confirmation remains required before OTA validity is committed.
 Cat/dog changes are deferred at the user's request; R3 audio remains as is.
+
+## R5 two-piece photo puzzle and lighter dot transitions
+
+For a child under two, the new fourth right-side entry opens a two-piece animal
+photo puzzle. Large 148×162 pixel halves reuse the existing licensed 296×162
+photos; child image clipping requires no transformed bitmap allocation. Pieces
+can be dragged, get a generous 52×40 pixel snap tolerance, and remain movable
+after an incomplete attempt. A fitted piece is placed behind the remaining one
+so it cannot hide the last draggable half. Completion waits for a parent's tap
+on 再玩; there are no scores, timers, automatic advances or tilt controls.
+The duck, cow, sheep and chicken photos rotate. BOOT and 返回 exit the puzzle;
+conversation and push-to-talk handlers observe the same local-interaction guard.
+No audio assets or global volume are changed.
+
+Dot scatter/return retain their paths and timings but do not scale five circles
+simultaneously. Host UI checks require normal scale during scatter. R4 tilt
+mapping and dynamics are unchanged. Physical smoothness still requires testing.

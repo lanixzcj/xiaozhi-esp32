@@ -14,7 +14,8 @@ constexpr uint32_t kYellow = 0xF5C400;
 constexpr uint32_t kRed = 0xE23B3B;
 constexpr uint32_t kBlue = 0x2E7BD6;
 constexpr int kSize = 64;
-constexpr int kScatterScale = 320;
+// Translation-only transitions avoid five intermediate transformed layers.
+constexpr int kScatterScale = LV_SCALE_NONE;
 constexpr uint32_t kMixMs = 240;
 
 struct Place {

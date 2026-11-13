@@ -10,6 +10,7 @@
 #include "esp32_camera.h"
 #include "i2c_device.h"
 #include "mcp_server.h"
+#include "photo_puzzle_game.h"
 #include "press_to_talk_mcp_tool.h"
 #include "qmi8658.h"
 #include "transport_touch_game.h"
@@ -78,6 +79,7 @@ private:
     AnimalTouchGame* animal_game_ = nullptr;
     TransportTouchGame* transport_game_ = nullptr;
     DotTapGame* dot_game_ = nullptr;
+    PhotoPuzzleGame* puzzle_game_ = nullptr;
 #endif
 
     void InitializeI2c() {
@@ -118,6 +120,10 @@ private:
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (puzzle_game_ && puzzle_game_->IsVisible()) {
+                puzzle_game_->RequestExit();
+                return;
+            }
             if (dot_game_ && dot_game_->IsVisible()) {
                 dot_game_->RequestExit();
                 return;
@@ -146,7 +152,8 @@ private:
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
-                (dot_game_ && dot_game_->IsVisible())) {
+                (dot_game_ && dot_game_->IsVisible()) ||
+                (puzzle_game_ && puzzle_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -158,7 +165,8 @@ private:
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
-                (dot_game_ && dot_game_->IsVisible())) {
+                (dot_game_ && dot_game_->IsVisible()) ||
+                (puzzle_game_ && puzzle_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -172,7 +180,8 @@ private:
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
-                (dot_game_ && dot_game_->IsVisible())) {
+                (dot_game_ && dot_game_->IsVisible()) ||
+                (puzzle_game_ && puzzle_game_->IsVisible())) {
                 return;
             }
 #endif
@@ -278,11 +287,13 @@ private:
                 animal_game_ = new AnimalTouchGame(display_);
                 transport_game_ = new TransportTouchGame(display_);
                 dot_game_ = new DotTapGame(display_, &imu_);
+                puzzle_game_ = new PhotoPuzzleGame(display_);
                 // Run after Application has initialized display, audio and callbacks.
                 Application::GetInstance().Schedule([this]() {
                     animal_game_->Initialize();
                     transport_game_->Initialize();
                     dot_game_->Initialize();
+                    puzzle_game_->Initialize();
                 });
             }
 #else

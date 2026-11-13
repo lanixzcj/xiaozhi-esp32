@@ -3,6 +3,7 @@
 
 #include "animal_touch_game.h"
 #include "dot_tap_game.h"
+#include "photo_puzzle_game.h"
 #include "transport_touch_game.h"
 
 int main(int argc, char** argv) {
@@ -17,12 +18,14 @@ int main(int argc, char** argv) {
     AnimalTouchGame animal(&display);
     TransportTouchGame transport(&display);
     DotTapGame dot(&display, nullptr);
+    PhotoPuzzleGame puzzle(&display);
     animal.Initialize();
     transport.Initialize();
     dot.Initialize();
+    puzzle.Initialize();
     auto layer = lv_layer_top();
     lv_obj_update_layout(layer);
-    for (int row = 0; row < 3; ++row) {
+    for (int row = 0; row < 4; ++row) {
         auto entry = lv_obj_get_child(layer, row * 2);
         assert(lv_obj_get_x(entry) == 240);
         assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4 + row * 46);

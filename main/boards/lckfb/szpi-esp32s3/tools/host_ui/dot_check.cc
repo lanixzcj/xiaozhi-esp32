@@ -161,6 +161,8 @@ int main(int argc, char** argv) {
     assert(game.page() == DotTapSession::Page::Scattering);
     lv_obj_update_layout(panel);
     assert(lv_obj_get_x(dots[0]) < 0);
+    for (auto* dot : dots)
+        assert(lv_obj_get_style_transform_scale_x(dot, LV_PART_MAIN) == LV_SCALE_NONE);
     Snapshot("page4-scattered");
     app.audio.busy = false;
     while (game.page() != DotTapSession::Page::Settled) {
