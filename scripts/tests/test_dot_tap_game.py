@@ -243,10 +243,9 @@ int main() {
             self.assertLess(len(data), 6 * 1024)
 
         game = (BOARD / "dot_tap_game.cc").read_text()
-        self.assertIn("轻点", game)
+        self.assertIn('Chip(layer, "点点点"', game)
         self.assertIn("kFallbackHoldMs", game)
         self.assertIn("dot_tap_sounds::Get", game)
-        self.assertNotIn("点点点", game)
         self.assertNotIn("Press Here", game)
         for forbidden in ("lv_screen_load", "lv_obj_clean", "lv_obj_delete", "nvs_", "esp_restart",
                           "LV_EVENT_LONG_PRESSED_REPEAT"):

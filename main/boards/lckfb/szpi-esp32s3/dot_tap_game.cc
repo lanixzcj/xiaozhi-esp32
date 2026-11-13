@@ -26,12 +26,11 @@ struct Place {
 
 // 320x240, 64 px dots. Page one reuses the center of the five-dot layout.
 constexpr Place kFive[DotTapSession::kDots] = {
-    {24, 14, kYellow}, {232, 14, kYellow}, {128, 88, kYellow},
+    {24, 48, kYellow},  {232, 48, kYellow},  {128, 88, kYellow},
     {24, 162, kYellow}, {232, 162, kYellow},
 };
 constexpr Place kMixed[DotTapSession::kDots] = {
-    {36, 22, kYellow}, {214, 18, kYellow}, {118, 158, kRed},
-    {22, 118, kRed}, {214, 102, kBlue},
+    {36, 22, kYellow}, {214, 48, kYellow}, {118, 158, kRed}, {22, 118, kRed}, {214, 102, kBlue},
 };
 // Same colors as kMixed, flung toward the edges (some sit slightly off-screen).
 constexpr Place kScattered[DotTapSession::kDots] = {
@@ -128,7 +127,7 @@ void DotTapGame::Initialize() {
         return;
     }
     auto layer = lv_layer_top();
-    entry_ = Chip(layer, "轻点", 240, 4, 72, 38);
+    entry_ = Chip(layer, "点点点", 240, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
     UpdateEntryPosition();
 
@@ -163,13 +162,18 @@ void DotTapGame::Initialize() {
     lv_obj_set_width(detail, 300);
     lv_obj_align(detail, LV_ALIGN_TOP_MID, 0, 72);
     restart_ = Chip(rest_, "家长长按再玩", 40, 120, 240, 52);
-    back_ = Chip(rest_, "返回", 228, 8, 80, 40);
+    back_ = Chip(panel_, "返回", 228, 4, 80, 40);
 
     auto on_event = [](lv_event_t* event) {
         auto* self = static_cast<DotTapGame*>(lv_event_get_user_data(event));
         auto* target = static_cast<lv_obj_t*>(lv_event_get_target(event));
         const auto code = lv_event_get_code(event);
         const uint32_t now = lv_tick_get();
+        if (target == self->back_) {
+            if (code == LV_EVENT_CLICKED)
+                self->RequestExit();
+            return;
+        }
         if (code == LV_EVENT_PRESSED) {
             self->drag_index_ = -1;
             self->dragged_ = false;
@@ -218,10 +222,6 @@ void DotTapGame::Initialize() {
         }
         if (target == self->entry_) {
             Application::GetInstance().Schedule([self]() { self->Enter(); });
-            return;
-        }
-        if (target == self->back_) {
-            self->RequestExit();
             return;
         }
         // The release that already counted as a shake is not also a tap.
@@ -647,6 +647,7 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
         }
         lv_obj_remove_flag(rest_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(rest_);
+        lv_obj_move_foreground(back_);
         pose_lock_until_ = lv_tick_get();
         return;
     }

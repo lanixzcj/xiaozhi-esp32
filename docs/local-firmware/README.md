@@ -91,3 +91,12 @@ No audio assets or global volume are changed.
 Dot scatter/return retain their paths and timings but do not scale five circles
 simultaneously. Host UI checks require normal scale during scatter. R4 tilt
 mapping and dynamics are unchanged. Physical smoothness still requires testing.
+
+## R6 dot game name and persistent touch return
+
+The home label is 点点点. A touch 返回 button is now a direct child of the game
+panel, visible on all pages rather than only the rest overlay. It stays above
+the rest overlay, and its hold cannot trigger the mixed-page shake fallback.
+The two top yellow dots and the upper-right mixed dot are moved below the return
+button. BOOT still exits. Actual LVGL pointer tests cover return from all built-in
+pages, including scatter, settling and rest. Tilt, puzzle and audio are unchanged.

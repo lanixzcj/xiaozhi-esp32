@@ -93,6 +93,8 @@ int main(int argc, char** argv) {
         dots[index] = lv_obj_get_child(panel, index);
     }
     auto rest = lv_obj_get_child(panel, 5);
+    auto back = lv_obj_get_child(panel, 6);
+    assert(std::string(lv_label_get_text(lv_obj_get_child(entry, 0))) == "点点点");
     auto restart = lv_obj_get_child(rest, 2);
     auto& app = Application::GetInstance();
 
@@ -434,6 +436,50 @@ int main(int argc, char** argv) {
     assert(game.page() == DotTapSession::Page::Settled);
     game.RequestExit();
 
+    // The touch return button must work on every page, including animations
+    // and rest. Dispatch real pointer events to catch sibling/z-order mistakes.
+    accel.on = false;
+    auto return_input = lv_indev_create();
+    lv_indev_set_type(return_input, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(return_input, [](lv_indev_t*, lv_indev_data_t* data) {
+        data->point = finger_point;
+        data->state = finger_state;
+    });
+    using P = DotTapSession::Page;
+    for (P page : {P::One, P::Five, P::Mixed, P::Scattering, P::Settling, P::Settled, P::Rest}) {
+        Click(entry);
+        if (page != P::One && page != P::Rest)
+            Click(dots[2]);
+        if (page != P::One && page != P::Five && page != P::Rest)
+            Click(dots[0]);
+        if (page == P::Scattering || page == P::Settling || page == P::Settled) {
+            Click(dots[0]);
+            Click(dots[1]);
+            Click(dots[4]);
+        }
+        if (page == P::Settling || page == P::Settled)
+            Advance(DotTapSession::kScatterMs);
+        if (page == P::Settled)
+            Advance(DotTapSession::kSettleMs);
+        if (page == P::Rest)
+            Advance(DotTapSession::kLimitMs);
+        assert(game.page() == page);
+        lv_obj_update_layout(panel);
+        assert(lv_obj_get_parent(back) == panel && !Hidden(back));
+        finger_point = {268, 24};
+        finger_state = LV_INDEV_STATE_PRESSED;
+        lv_indev_read(return_input);
+        Advance(page == P::Mixed ? 800 : 20);
+        if (page == P::Mixed)
+            assert(game.page() == P::Mixed);  // hold isn't shake
+        finger_state = LV_INDEV_STATE_RELEASED;
+        lv_indev_read(return_input);
+        Advance(40);
+        assert(!game.IsVisible() && !app.active);
+        assert(!Hidden(entry));
+    }
+    lv_indev_delete(return_input);
+
     lv_mem_monitor_t before{}, after{};
     lv_mem_monitor(&before);
     accel.on = false;
@@ -446,7 +492,7 @@ int main(int argc, char** argv) {
     assert(after.free_size >= before.free_size);
     assert(lv_mem_test() == LV_RESULT_OK);
     assert(lv_obj_get_child_count(layer) == 2);
-    assert(lv_obj_get_child_count(panel) == 6);
+    assert(lv_obj_get_child_count(panel) == 7);
     assert(lv_screen_active() == chat);
     printf("dot-tap UI checks passed, free %zu -> %zu bytes\n", before.free_size, after.free_size);
 }
