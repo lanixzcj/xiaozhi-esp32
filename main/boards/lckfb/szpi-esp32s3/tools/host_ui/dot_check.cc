@@ -8,6 +8,8 @@
 #include "dot_tap_sounds.h"
 
 static const char* output_dir = ".";
+static lv_point_t finger_point{160, 120};
+static lv_indev_state_t finger_state = LV_INDEV_STATE_RELEASED;
 
 void Snapshot(const char* name) {
     lv_obj_update_layout(lv_layer_top());
@@ -325,6 +327,53 @@ int main(int argc, char** argv) {
     assert(game.page() == DotTapSession::Page::One);
     game.RequestExit();
     assert(!game.IsVisible());
+
+    // Real LVGL pointer dispatch: a drag retains the pressed dot, works in all
+    // four corners, stays inside the screen, and does not count as a tap.
+    accel.on = false;
+    Click(entry);
+    auto input = lv_indev_create();
+    lv_indev_set_type(input, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(input, [](lv_indev_t*, lv_indev_data_t* data) {
+        data->point = finger_point;
+        data->state = finger_state;
+    });
+    finger_point = {160, 120};
+    finger_state = LV_INDEV_STATE_PRESSED;
+    lv_indev_read(input);
+    Advance(20);
+    for (auto point :
+         {lv_point_t{48, 48}, lv_point_t{272, 48}, lv_point_t{272, 192}, lv_point_t{48, 192}}) {
+        finger_point = point;
+        lv_indev_read(input);
+        Advance(40);
+        lv_obj_update_layout(panel);
+        assert(lv_obj_get_x(dots[2]) == point.x - 32);
+        assert(lv_obj_get_y(dots[2]) == point.y - 32);
+        assert(game.page() == DotTapSession::Page::One);
+    }
+    finger_state = LV_INDEV_STATE_RELEASED;
+    lv_indev_read(input);
+    Advance(40);
+    assert(game.page() == DotTapSession::Page::One);
+    finger_state = LV_INDEV_STATE_PRESSED;
+    lv_indev_read(input);
+    Advance(40);
+    finger_state = LV_INDEV_STATE_RELEASED;
+    lv_indev_read(input);
+    Advance(40);
+    assert(game.page() == DotTapSession::Page::Five);
+    lv_indev_delete(input);
+    Click(dots[0]);
+    assert(game.page() == DotTapSession::Page::Mixed);
+    Click(dots[0]);
+    Click(dots[1]);
+    Click(dots[4]);
+    assert(game.page() == DotTapSession::Page::Scattering);
+    Advance(DotTapSession::kScatterMs);
+    Advance(DotTapSession::kSettleMs);
+    assert(game.page() == DotTapSession::Page::Settled);
+    game.RequestExit();
 
     lv_mem_monitor_t before{}, after{};
     lv_mem_monitor(&before);

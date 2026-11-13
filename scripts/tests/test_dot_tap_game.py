@@ -103,6 +103,18 @@ int main() {
  for (int i = 0; i < 40; ++i) roll.Step(-1000, 0, 50);
  assert(roll.body(0).x <= 8);
 
+ // The entire local round must also be playable by taps alone.
+ DotTapSession tap_only;tap_only.Start(0);
+ assert(tap_only.Tap(1,2) && tap_only.Tap(2,0));
+ assert(tap_only.page()==P::Mixed);
+ assert(tap_only.Tap(3,0) && tap_only.page()==P::Mixed);
+ assert(tap_only.Tap(4,1) && tap_only.page()==P::Mixed);
+ assert(tap_only.Tap(5,4) && tap_only.page()==P::Scattering);
+ assert(tap_only.Tick(5+S::kScatterMs));
+ assert(tap_only.Tick(5+S::kScatterMs+S::kSettleMs));
+ assert(tap_only.page()==P::Settled && tap_only.Tap(2000,-1));
+ assert(tap_only.page()==P::One);
+
  DotRound round;
  const char* valid =
      "{\"gap_ms\":10,\"note\":\"hi\",\"dots\":["
@@ -192,7 +204,7 @@ int main() {
         self.assertNotIn("点点点", game)
         self.assertNotIn("Press Here", game)
         for forbidden in ("lv_screen_load", "lv_obj_clean", "lv_obj_delete", "nvs_", "esp_restart",
-                          "LV_EVENT_LONG_PRESSED_REPEAT", "LV_EVENT_PRESSING"):
+                          "LV_EVENT_LONG_PRESSED_REPEAT"):
             self.assertNotIn(forbidden, game)
         font = (BOARD / "animal_game_font.c").read_text()
         for character in "轻点休息一下吧和爸爸妈妈再点一点家长长按再玩返回":

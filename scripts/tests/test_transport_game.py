@@ -34,15 +34,15 @@ int main() {
    const size_t answer = s.choice(0) == s.target() ? 0 : 1;
    assert(s.Choose(now, 1 - answer)); assert(!s.correct());
    assert(!s.Choose(now, answer));
-   assert(!s.Tick(now + 899, true));
-   assert(!s.Tick(now + 900, false)); // wrong-answer replay still playing
-   assert(s.Tick(now + 900, true)); now += 900;
+   assert(!s.Tick(now + S::kFeedbackMs - 1, true));
+   assert(!s.Tick(now + S::kFeedbackMs, false)); // wrong-answer replay still playing
+   assert(s.Tick(now + S::kFeedbackMs, true)); now += S::kFeedbackMs;
    assert(s.phase() == P::Choosing && s.round() == round);
    assert(s.Listen(now)); // explicit replay
    assert(s.Tick(now + 3000, true)); now += 3000;
    assert(s.Choose(now, answer)); assert(s.correct());
-   assert(!s.Tick(now + 900, false)); // cheer still playing
-   assert(s.Tick(now + 900, true)); now += 900;
+   assert(!s.Tick(now + S::kFeedbackMs, false)); // cheer still playing
+   assert(s.Tick(now + S::kFeedbackMs, true)); now += S::kFeedbackMs;
   }
   assert(s.phase() == P::Rest);
   assert(!s.Listen(now) && !s.Choose(now, 0) && !s.Tick(now + 100000, true));
@@ -75,8 +75,8 @@ int main() {
                 self.assertNotIn(forbidden, text, name)
         transport = (BOARD / 'transport_touch_game.cc').read_text()
         animal = (BOARD / 'animal_touch_game.cc').read_text()
-        self.assertIn('"交通", 240', transport)
-        self.assertIn('"动物", 160', animal)
+        self.assertIn('"交通", 1', transport)
+        self.assertIn('"动物", 0', animal)
         self.assertIn('animal_game_photo', animal)
         board = (BOARD / 'lichuang_dev_board.cc').read_text()
         self.assertIn('transport_game_->RequestExit()', board)

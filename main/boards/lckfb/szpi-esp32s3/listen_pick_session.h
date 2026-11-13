@@ -12,7 +12,7 @@ class ListenPickSession {
 public:
     enum class Phase { Closed, Ready, Listening, Choosing, Feedback, Rest };
     static constexpr uint32_t kLimitMs = 180000;
-    static constexpr uint32_t kFeedbackMs = 900;
+    static constexpr uint32_t kFeedbackMs = 480;
     static constexpr uint32_t kParentHoldMs = 1500;
 
     explicit ListenPickSession(size_t count) : count_(count < 2 ? 2 : count) {}

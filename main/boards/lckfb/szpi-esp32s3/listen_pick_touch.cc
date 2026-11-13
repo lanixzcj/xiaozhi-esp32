@@ -22,8 +22,8 @@ constexpr int kCardGap = 12;
 
 using Phase = ListenPickSession::Phase;
 
-void SetCardScale(void* object, int32_t value) {
-    lv_obj_set_style_transform_scale(static_cast<lv_obj_t*>(object), value, 0);
+void SetCardRim(void* object, int32_t value) {
+    lv_obj_set_style_outline_width(static_cast<lv_obj_t*>(object), value, 0);
 }
 
 lv_obj_t* Box(lv_obj_t* parent, int x, int y, int width, int height, uint32_t color, int radius) {
@@ -63,11 +63,12 @@ void SetButtonText(lv_obj_t* button, const char* text) {
 }  // namespace
 
 ListenPickTouch::ListenPickTouch(Display* display, ListenPickSession& session, const char* label,
-                                 int entry_x, ImageFn image, SoundFn sound, const char* rest_detail)
+                                 int entry_row, ImageFn image, SoundFn sound,
+                                 const char* rest_detail)
     : display_(display),
       session_(session),
       label_(label),
-      entry_x_(entry_x),
+      entry_row_(entry_row),
       image_(image),
       sound_(sound),
       rest_detail_(rest_detail) {}
@@ -81,7 +82,7 @@ void ListenPickTouch::Initialize() {
         return;
     }
     auto layer = lv_layer_top();
-    entry_ = Button(layer, label_, entry_x_, 4, 72, 38);
+    entry_ = Button(layer, label_, 240, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
     UpdateEntryPosition();
     lv_obj_add_event_cb(
@@ -218,7 +219,7 @@ void ListenPickTouch::Initialize() {
 void ListenPickTouch::UpdateEntryPosition() {
     if (!entry_)
         return;
-    const int y = display_->GetTopBarBottom() + 4;
+    const int y = display_->GetTopBarBottom() + 4 + entry_row_ * 46;
     if (lv_obj_get_y(entry_) != y)
         lv_obj_set_y(entry_, y);
 }
@@ -384,7 +385,7 @@ void ListenPickTouch::UpdateView() {
         lv_image_set_inner_align(images_[side], LV_IMAGE_ALIGN_CONTAIN);
         const bool match = celebrate && session_.choice(side) == session_.target();
         lv_obj_set_style_bg_color(cards_[side], lv_color_hex(match ? kCorrect : kCard), 0);
-        lv_obj_set_style_outline_width(cards_[side], match ? 8 : 3, 0);
+        lv_obj_set_style_outline_width(cards_[side], match ? 6 : 3, 0);
         lv_obj_set_style_outline_color(cards_[side], lv_color_hex(match ? kYes : kRim), 0);
     }
 }
@@ -397,10 +398,11 @@ void ListenPickTouch::Bounce(size_t side) {
     lv_anim_t anim;
     lv_anim_init(&anim);
     lv_anim_set_var(&anim, cards_[side]);
-    lv_anim_set_exec_cb(&anim, SetCardScale);
-    lv_anim_set_values(&anim, LV_SCALE_NONE, LV_SCALE_NONE + 80);
-    lv_anim_set_duration(&anim, 240);
-    lv_anim_set_reverse_duration(&anim, 320);
+    lv_anim_set_exec_cb(&anim, SetCardRim);
+    // Border-only feedback avoids a transformed layer and photo resampling.
+    lv_anim_set_values(&anim, 3, 6);
+    lv_anim_set_duration(&anim, 140);
+    lv_anim_set_reverse_duration(&anim, 180);
     lv_anim_set_path_cb(&anim, lv_anim_path_ease_out);
     lv_anim_start(&anim);
 }
@@ -410,8 +412,8 @@ void ListenPickTouch::ClearBounce() {
         if (card == nullptr) {
             continue;
         }
-        lv_anim_delete(card, SetCardScale);
-        lv_obj_set_style_transform_scale(card, LV_SCALE_NONE, 0);
+        lv_anim_delete(card, SetCardRim);
+        lv_obj_set_style_outline_width(card, 3, 0);
     }
 }
 

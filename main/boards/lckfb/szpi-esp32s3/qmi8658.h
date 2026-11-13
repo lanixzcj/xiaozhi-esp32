@@ -35,12 +35,15 @@ private:
     static constexpr uint8_t kRegAxL = 0x35;
     static constexpr uint8_t kRegGxL = 0x3B;
     static constexpr uint8_t kRegReset = 0x60;
-    // Vendor sequence for this board: auto-increment, ±4g at 250 Hz,
+    // Normal measurement: auto-increment, ±4g at 250 Hz,
     // gyro 512 dps at 250 Hz, then enable accel and gyro.
     static constexpr uint8_t kCtrl1AutoIncrement = 0x40;
-    static constexpr uint8_t kCtrl2Accel4g250Hz = 0x95;
-    static constexpr uint8_t kCtrl3Gyro512dps250Hz = 0xD5;
+    static constexpr uint8_t kCtrl2Accel4g250Hz = 0x15;
+    static constexpr uint8_t kCtrl3Gyro512dps250Hz = 0x55;
     static constexpr uint8_t kCtrl7AccelAndGyro = 0x03;
+    // CTRL2/CTRL3 bit 7 enables electrostatic self-test, not normal sampling.
+    static_assert((kCtrl2Accel4g250Hz & 0x80) == 0);
+    static_assert((kCtrl3Gyro512dps250Hz & 0x80) == 0);
     static constexpr int kMaxReadFailures = 8;
 
     i2c_master_dev_handle_t device_ = nullptr;

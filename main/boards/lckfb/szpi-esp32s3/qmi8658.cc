@@ -76,6 +76,13 @@ bool Qmi8658::Init(i2c_master_bus_handle_t bus) {
         Detach("QMI8658 configuration failed");
         return false;
     }
+    uint8_t accel_config = 0;
+    uint8_t gyro_config = 0;
+    if (!Read(kRegCtrl2, &accel_config, 1) || accel_config != kCtrl2Accel4g250Hz ||
+        !Read(kRegCtrl3, &gyro_config, 1) || gyro_config != kCtrl3Gyro512dps250Hz) {
+        Detach("QMI8658 measurement configuration readback failed");
+        return false;
+    }
     vTaskDelay(pdMS_TO_TICKS(10));
     failures_ = 0;
     ESP_LOGI(kTag, "QMI8658 ready at 0x%02X, accel ±4g (%d LSB/g), gyro 512 dps", address,

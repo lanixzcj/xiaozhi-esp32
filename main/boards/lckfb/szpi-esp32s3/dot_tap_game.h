@@ -18,10 +18,10 @@
 
 // Full-screen flat-dot game for a toddler and a parent. The chat screen stays
 // underneath. Shake comes from `accel` when that chip is present; otherwise a
-// long press on the mixed-color page stands in for it.
+// long press or three taps on the mixed-color page can also advance it.
 class DotTapGame {
 public:
-    // Held this long on the mixed page when the IMU is absent.
+    // Held this long on the mixed page, whether or not the IMU is present.
     static constexpr uint32_t kFallbackHoldMs = 700;
 
     DotTapGame(Display* display, AccelSource* accel);
@@ -54,6 +54,11 @@ private:
     std::atomic<bool> pressed_{false};
     std::atomic<bool> fallback_latched_{false};
     std::atomic<uint32_t> pressed_at_{0};
+    int drag_index_ = -1;
+    lv_point_t press_point_{};
+    lv_point_t drag_offset_{};
+    bool dragged_ = false;
+    bool suppress_tap_ = false;
     uint32_t generation_ = 0;
     int read_failures_ = 0;
     DotRoll roll_;
@@ -66,6 +71,7 @@ private:
         LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE, LV_SCALE_NONE};
 
     void UpdateEntryPosition();
+    void Drag(lv_indev_t* input);
     void Enter();
     void Exit();
     void Poll();

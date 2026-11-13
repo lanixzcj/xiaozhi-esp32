@@ -23,3 +23,8 @@ add_executable(dot_check dot_check.cc "${BOARD}/dot_tap_game.cc" "${BOARD}/anima
 target_include_directories(dot_check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/stubs" "${BOARD}")
 target_compile_options(dot_check PRIVATE -UNDEBUG)
 target_link_libraries(dot_check lvgl m)
+
+add_executable(menu_check menu_check.cc "${BOARD}/animal_touch_game.cc" "${BOARD}/transport_touch_game.cc" "${BOARD}/listen_pick_touch.cc" "${BOARD}/dot_tap_game.cc" "${BOARD}/animal_game_font.c" "${BOARD}/animal_game_photos.c" "${BOARD}/transport_game_assets.cc")
+target_include_directories(menu_check PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/stubs" "${BOARD}")
+target_compile_options(menu_check PRIVATE -UNDEBUG)
+target_link_libraries(menu_check lvgl m)

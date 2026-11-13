@@ -8,7 +8,7 @@ static_assert(transport_game_assets::kCount == TransportGameSession::kCount);
 
 TransportTouchGame::TransportTouchGame(Display* display)
     : session_(),
-      ui_(display, session_, "交通", 240, transport_game_assets::GetImage,
+      ui_(display, session_, "交通", 1, transport_game_assets::GetImage,
           transport_game_assets::GetSound, nullptr) {}
 
 #endif

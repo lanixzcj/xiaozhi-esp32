@@ -21,7 +21,7 @@ public:
     using ImageFn = const lv_image_dsc_t* (*)(size_t index);
     using SoundFn = std::string_view (*)(size_t index);
 
-    ListenPickTouch(Display* display, ListenPickSession& session, const char* label, int entry_x,
+    ListenPickTouch(Display* display, ListenPickSession& session, const char* label, int entry_row,
                     ImageFn image, SoundFn sound, const char* rest_detail);
     ListenPickTouch(const ListenPickTouch&) = delete;
     ListenPickTouch& operator=(const ListenPickTouch&) = delete;
@@ -34,7 +34,7 @@ private:
     Display* display_;
     ListenPickSession& session_;
     const char* label_;
-    int entry_x_;
+    int entry_row_;
     ImageFn image_;
     SoundFn sound_;
     const char* rest_detail_;

@@ -63,6 +63,17 @@ public:
         body.alive = alive;
     }
 
+    void DragTo(int index, float x, float y) {
+        if (index < 0 || index >= kDots || !bodies_[index].alive)
+            return;
+        auto& b = bodies_[index];
+        const float right = kScreenW - b.size - kMargin;
+        const float bottom = kScreenH - b.size - kMargin;
+        b.x = b.home_x = x < kMargin ? kMargin : (x > right ? right : x);
+        b.y = b.home_y = y < kMargin ? kMargin : (y > bottom ? bottom : y);
+        b.vx = b.vy = 0;
+    }
+
     void Step(int pull_x_mg, int pull_y_mg, uint32_t dt_ms) {
         float dt = dt_ms / 1000.f;
         if (dt <= 0.f) {

@@ -127,7 +127,7 @@ void DotTapGame::Initialize() {
         return;
     }
     auto layer = lv_layer_top();
-    entry_ = Chip(layer, "轻点", 84, 4, 72, 38);
+    entry_ = Chip(layer, "轻点", 240, 4, 72, 38);
     lv_obj_set_style_text_font(entry_, &animal_game_font, 0);
     UpdateEntryPosition();
 
@@ -147,6 +147,7 @@ void DotTapGame::Initialize() {
         lv_obj_set_style_transform_pivot_y(dot, kSize / 2, 0);
         lv_obj_remove_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(dot, LV_OBJ_FLAG_PRESS_LOCK);
         lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
         dots_[index] = dot;
     }
@@ -169,12 +170,36 @@ void DotTapGame::Initialize() {
         const auto code = lv_event_get_code(event);
         const uint32_t now = lv_tick_get();
         if (code == LV_EVENT_PRESSED) {
+            self->drag_index_ = -1;
+            self->dragged_ = false;
+            self->suppress_tap_ = false;
+            auto input = lv_event_get_indev(event);
+            if (self->visible_.load() && input &&
+                self->session_.page() != DotTapSession::Page::Rest) {
+                for (int i = 0; i < DotTapSession::kDots; ++i) {
+                    if (target != self->dots_[i])
+                        continue;
+                    self->drag_index_ = i;
+                    lv_indev_get_point(input, &self->press_point_);
+                    self->drag_offset_.x = self->press_point_.x - lv_obj_get_x(target);
+                    self->drag_offset_.y = self->press_point_.y - lv_obj_get_y(target);
+                    break;
+                }
+            }
             self->pressed_.store(true);
             self->pressed_at_.store(now);
             self->fallback_latched_.store(false);
             return;
         }
+        if (code == LV_EVENT_PRESSING) {
+            self->Drag(lv_event_get_indev(event));
+            return;
+        }
         if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+            if (self->dragged_)
+                self->suppress_tap_ = true;
+            self->drag_index_ = -1;
+            self->dragged_ = false;
             const bool was_down = self->pressed_.exchange(false);
             const uint32_t held = uint32_t(now - self->pressed_at_.load());
             if (code == LV_EVENT_RELEASED && target == self->restart_ && was_down &&
@@ -199,7 +224,8 @@ void DotTapGame::Initialize() {
             return;
         }
         // The release that already counted as a shake is not also a tap.
-        if (self->fallback_latched_.exchange(false) || !self->visible_.load()) {
+        if (self->fallback_latched_.exchange(false) || self->suppress_tap_ ||
+            !self->visible_.load()) {
             return;
         }
         int index = -1;
@@ -261,7 +287,7 @@ void DotTapGame::Initialize() {
 void DotTapGame::UpdateEntryPosition() {
     if (!entry_)
         return;
-    const int y = display_->GetTopBarBottom() + 4;
+    const int y = display_->GetTopBarBottom() + 4 + 2 * 46;
     if (lv_obj_get_y(entry_) != y)
         lv_obj_set_y(entry_, y);
 }
@@ -283,6 +309,9 @@ void DotTapGame::Enter() {
     session_.Start(lv_tick_get());
     shake_.Reset();
     read_failures_ = 0;
+    drag_index_ = -1;
+    dragged_ = false;
+    suppress_tap_ = false;
     pressed_.store(false);
     fallback_latched_.store(false);
     visible_.store(true);
@@ -308,6 +337,9 @@ void DotTapGame::Exit() {
     for (int index = 0; index < DotTapSession::kDots; ++index) {
         HideDot(index);
     }
+    drag_index_ = -1;
+    dragged_ = false;
+    suppress_tap_ = false;
     pressed_.store(false);
     visible_.store(false);
     rounds_.Reset();
@@ -346,18 +378,16 @@ void DotTapGame::Poll() {
             }
         }
     }
-    const bool fallback = accel_ == nullptr || !accel_->available() || read_failures_ >= 8;
+    // A deliberate hold always works, even if a present IMU is hard to shake.
     DisplayLockGuard lock(display_);
     if (!lock || !visible_.load()) {
         return;
     }
     if (shook) {
         OnShake(now);
-    } else if (fallback &&
-               (session_.page() == DotTapSession::Page::Mixed ||
+    } else if ((session_.page() == DotTapSession::Page::Mixed ||
                 session_.page() == DotTapSession::Page::Custom) &&
-               pressed_.load() &&
-               !fallback_latched_.load() &&
+               pressed_.load() && !dragged_ && !fallback_latched_.load() &&
                uint32_t(now - pressed_at_.load()) >= kFallbackHoldMs) {
         fallback_latched_.store(true);
         OnShake(now);
@@ -400,7 +430,34 @@ void DotTapGame::RequestRound(uint32_t now) {
     }
 }
 
+void DotTapGame::Drag(lv_indev_t* input) {
+    if (!input || drag_index_ < 0 || !visible_.load())
+        return;
+    const auto page = session_.page();
+    if (page == DotTapSession::Page::Scattering || page == DotTapSession::Page::Settling ||
+        page == DotTapSession::Page::Rest)
+        return;
+    lv_point_t point;
+    lv_indev_get_point(input, &point);
+    const int dx = point.x - press_point_.x;
+    const int dy = point.y - press_point_.y;
+    if (!dragged_ && dx * dx + dy * dy < 36)
+        return;
+    dragged_ = true;
+    auto dot = dots_[drag_index_];
+    lv_anim_delete(dot, SetX);
+    lv_anim_delete(dot, SetY);
+    roll_.DragTo(drag_index_, point.x - drag_offset_.x, point.y - drag_offset_.y);
+    const auto& body = roll_.body(drag_index_);
+    lv_obj_set_pos(dot, int(body.x), int(body.y));
+    pose_lock_until_ = lv_tick_get();
+}
+
 void DotTapGame::ApplyTilt(uint32_t now, int pull_x_mg, int pull_y_mg) {
+    if (drag_index_ >= 0) {
+        last_tilt_ms_ = now;
+        return;
+    }
     const auto page = session_.page();
     const bool tilt = page == DotTapSession::Page::One || page == DotTapSession::Page::Five ||
                       page == DotTapSession::Page::Mixed || page == DotTapSession::Page::Custom ||
@@ -466,6 +523,11 @@ void DotTapGame::Action(uint32_t generation, int index) {
         return;
     }
     const auto after = session_.page();
+    if (after == DotTapSession::Page::Scattering) {
+        PlayCue(static_cast<int>(dot_tap_sounds::Cue::Scatter));
+        ShowPage(after);
+        return;
+    }
     if (after == DotTapSession::Page::Rest) {
         ShowPage(after);
         app.GetAudioService().ResetDecoder();
@@ -505,6 +567,9 @@ void DotTapGame::Restart() {
     session_.Start(lv_tick_get());
     shake_.Reset();
     read_failures_ = 0;
+    drag_index_ = -1;
+    dragged_ = false;
+    suppress_tap_ = false;
     pressed_.store(false);
     fallback_latched_.store(false);
     ShowPage(DotTapSession::Page::One);

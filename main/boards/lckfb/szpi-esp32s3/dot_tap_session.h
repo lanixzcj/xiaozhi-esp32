@@ -15,12 +15,14 @@ public:
     static constexpr uint32_t kParentHoldMs = 1500;
     static constexpr uint32_t kScatterMs = 480;
     static constexpr uint32_t kSettleMs = 560;
+    static constexpr int kColorTaps = 3;
 
     void Start(uint32_t now) {
         started_ = now;
         mark_ = now;
         page_ = Page::One;
         last_tap_ = -1;
+        color_taps_ = 0;
     }
     void Close() { page_ = Page::Closed; }
 
@@ -51,10 +53,15 @@ public:
                     return false;
                 }
                 last_tap_ = index;
+                if (++color_taps_ >= kColorTaps) {
+                    mark_ = now;
+                    page_ = Page::Scattering;
+                }
                 return true;
             case Page::Settled:
                 page_ = Page::One;
                 last_tap_ = -1;
+                color_taps_ = 0;
                 return true;
             default:
                 return false;
@@ -71,6 +78,7 @@ public:
             return false;
         }
         last_tap_ = -1;
+        color_taps_ = 0;
         page_ = Page::Custom;
         return true;
     }
@@ -114,4 +122,5 @@ private:
     uint32_t started_ = 0;
     uint32_t mark_ = 0;
     int last_tap_ = -1;
+    int color_taps_ = 0;
 };
