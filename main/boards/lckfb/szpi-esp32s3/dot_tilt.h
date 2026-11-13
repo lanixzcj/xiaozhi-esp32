@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 // Gravity for the flat dots. The QMI8658 reading points "up" (specific force).
@@ -48,10 +49,43 @@ public:
         pull_y_mg = ClampPull(kSignY * MilliG(ay));
     }
 
-    static void MapRelative(int16_t ax, int16_t ay, int16_t neutral_x, int16_t neutral_y,
-                            int& pull_x_mg, int& pull_y_mg) {
-        pull_x_mg = ClampPull(kSignX * MilliG(int(ax) - neutral_x));
-        pull_y_mg = ClampPull(kSignY * MilliG(int(ay) - neutral_y));
+    static bool IsGravitySample(int16_t ax, int16_t ay, int16_t az) {
+        float x = ax, y = ay, z = az;
+        return NormalizeGravity(x, y, z);
+    }
+
+    // Compare complete gravity vectors, rather than subtracting X/Y. Near
+    // upright, both forward and backward pitch reduce Y; their Z signs differ.
+    // The shortest relative rotation (current gravity cross neutral gravity)
+    // distinguishes them without gyro integration or accumulated drift.
+    static bool MapRelative(int16_t ax, int16_t ay, int16_t az, int16_t neutral_x,
+                            int16_t neutral_y, int16_t neutral_z, int& pull_x_mg, int& pull_y_mg) {
+        pull_x_mg = pull_y_mg = 0;
+        float x = ax, y = ay, z = az;
+        float nx = neutral_x, ny = neutral_y, nz = neutral_z;
+        if (!NormalizeGravity(x, y, z) || !NormalizeGravity(nx, ny, nz))
+            return false;
+        // Right-control rotation axis is gravity cross screen-right. Down is
+        // the perpendicular tangent axis. These adapt to flat and upright use.
+        float rx = 0.f, ry = nz, rz = -ny;
+        float length = std::sqrt(ry * ry + rz * rz);
+        if (length < 0.01f) {
+            ry = 1.f;
+            rz = 0.f;
+        } else {
+            ry /= length;
+            rz /= length;
+        }
+        const float dx = ry * nz - rz * ny;
+        const float dy = rz * nx;
+        const float dz = -ry * nx;
+        const float cx = y * nz - z * ny;
+        const float cy = z * nx - x * nz;
+        const float cz = x * ny - y * nx;
+        constexpr float sensitivity = 1400.f;  // 1.4 g pull at sin(angle)=1
+        pull_x_mg = ClampPull(int(sensitivity * (rx * cx + ry * cy + rz * cz)));
+        pull_y_mg = ClampPull(int(sensitivity * (dx * cx + dy * cy + dz * cz)));
+        return true;
     }
 
     void NoteHome(int index, float x, float y, bool alive, float size = kDot) {
@@ -132,6 +166,18 @@ public:
     static constexpr int kDots = 5;
 
 private:
+    static bool NormalizeGravity(float& x, float& y, float& z) {
+        const float length = std::sqrt(x * x + y * y + z * z);
+        // Ignore strong linear acceleration/free fall instead of treating a
+        // shake as a new holding pose or a huge tilt command.
+        if (length < 0.75f * kLsbPerG || length > 1.25f * kLsbPerG)
+            return false;
+        x /= length;
+        y /= length;
+        z /= length;
+        return true;
+    }
+
     static int MilliG(int raw) { return int(raw) * 1000 / kLsbPerG; }
 
     static int ClampPull(int milli_g) {

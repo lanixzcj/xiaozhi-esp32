@@ -57,3 +57,20 @@ the motion deadzone and spring pull, increases gravity response, and polls at
 seconds in the host regression. Actual mounting and feel need device testing.
 Cat/dog adapted WAVs receive +8 dB gain, keeping filtering/fades and preserving
 all other cues and the global volume setting. Their decoded peaks are ~-10 dBFS.
+
+## R4 upright tilt correction
+
+The user holds the screen facing them, nearly upright. R3 subtracts only X/Y
+acceleration; around upright, forward and backward pitch both reduce Y, so the
+same command is produced for opposite tilts. R4 normalizes complete X/Y/Z gravity
+vectors and projects their cross product onto two tangent control axes at the
+entry pose. Z now preserves the missing direction; the right-control axis adapts
+between flat and upright holding. There is no accumulated gyro integration drift.
+Response is 1.4 times sine of relative tilt, with the existing damping/deadzone.
+Strong linear acceleration and free fall produce no tilt command.
+
+Host regressions use physically consistent gravity at 0/30/60/85/90 degree poses,
+require all four screen edges and reversals, and exercise upright samples through
+the actual LVGL game timers. These checks do not prove the physical mounting or
+feel; user confirmation remains required before OTA validity is committed.
+Cat/dog changes are deferred at the user's request; R3 audio remains as is.

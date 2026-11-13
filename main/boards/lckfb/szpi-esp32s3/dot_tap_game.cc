@@ -310,7 +310,7 @@ void DotTapGame::Enter() {
     shake_.Reset();
     read_failures_ = 0;
     tilt_origin_samples_ = 0;
-    tilt_origin_sum_x_ = tilt_origin_sum_y_ = 0;
+    tilt_origin_sum_x_ = tilt_origin_sum_y_ = tilt_origin_sum_z_ = 0;
     drag_index_ = -1;
     dragged_ = false;
     suppress_tap_ = false;
@@ -409,15 +409,21 @@ void DotTapGame::Poll() {
     int pull_x = 0;
     int pull_y = 0;
     if (have_accel) {
-        if (tilt_origin_samples_ < 4) {
+        if (tilt_origin_samples_ < 4 && !DotRoll::IsGravitySample(ax, ay, az)) {
+            tilt_origin_samples_ = 0;
+            tilt_origin_sum_x_ = tilt_origin_sum_y_ = tilt_origin_sum_z_ = 0;
+        } else if (tilt_origin_samples_ < 4) {
             tilt_origin_sum_x_ += ax;
             tilt_origin_sum_y_ += ay;
+            tilt_origin_sum_z_ += az;
             if (++tilt_origin_samples_ == 4) {
                 tilt_origin_x_ = int16_t(tilt_origin_sum_x_ / 4);
                 tilt_origin_y_ = int16_t(tilt_origin_sum_y_ / 4);
+                tilt_origin_z_ = int16_t(tilt_origin_sum_z_ / 4);
             }
         } else {
-            DotRoll::MapRelative(ax, ay, tilt_origin_x_, tilt_origin_y_, pull_x, pull_y);
+            DotRoll::MapRelative(ax, ay, az, tilt_origin_x_, tilt_origin_y_, tilt_origin_z_, pull_x,
+                                 pull_y);
         }
     }
     if (rounds_.TimedOut(now)) {
@@ -579,7 +585,7 @@ void DotTapGame::Restart() {
     shake_.Reset();
     read_failures_ = 0;
     tilt_origin_samples_ = 0;
-    tilt_origin_sum_x_ = tilt_origin_sum_y_ = 0;
+    tilt_origin_sum_x_ = tilt_origin_sum_y_ = tilt_origin_sum_z_ = 0;
     drag_index_ = -1;
     dragged_ = false;
     suppress_tap_ = false;

@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -224,7 +225,8 @@ int main(int argc, char** argv) {
         Advance(50);
     }
     for (int i = 1; i <= 40; ++i) {
-        accel.ax = int16_t(-8000 * i / 40);
+        accel.ax = int16_t(-4000 * i / 40);
+        accel.az = int16_t(std::sqrt(8192.f * 8192.f - float(accel.ax) * accel.ax));
         Advance(50);
     }
     lv_obj_update_layout(panel);
@@ -236,10 +238,11 @@ int main(int argc, char** argv) {
     }
     Snapshot("tilt-right");
     for (int i = 1; i <= 30; ++i) {
-        accel.ax = int16_t(-8000 + 16000 * i / 30);
+        accel.ax = int16_t(-4000 + 8000 * i / 30);
+        accel.az = int16_t(std::sqrt(8192.f * 8192.f - float(accel.ax) * accel.ax));
         Advance(50);
     }
-    accel.ax = 8000;
+    accel.ax = 4000;
     for (int i = 0; i < 40; ++i) {
         Advance(50);
     }
@@ -341,10 +344,51 @@ int main(int argc, char** argv) {
     assert(lv_obj_get_x(dots[2]) == 128 && lv_obj_get_y(dots[2]) == 88);
     game.RequestExit();
 
+    // Regression for the user's upright holding pose: both pitch directions
+    // have the SAME Y reading, and only Z distinguishes up from down. Exercise
+    // the real game poll/timers/UI, including direct edge-to-edge reversals.
+    accel.ax = 0;
+    accel.ay = 0;
+    accel.az = 0;
+    Click(entry);
+    for (int i = 0; i < 6; ++i)
+        Advance(33);  // Invalid samples must not poison the entry calibration.
+    accel.ay = 8192;
+    for (int i = 0; i < 20; ++i)
+        Advance(33);
+    for (int axis = 0; axis < 2; ++axis) {
+        for (int sign : {1, -1}) {
+            for (int i = 1; i <= 15; ++i) {
+                float angle = sign * i * 3.14159265358979323846f / 180.f;
+                accel.ax = axis == 0 ? int16_t(-8192.f * std::sin(angle)) : 0;
+                accel.ay = int16_t(8192.f * std::cos(angle));
+                accel.az = axis == 1 ? int16_t(-8192.f * std::sin(angle)) : 0;
+                Advance(33);
+            }
+            for (int i = 0; i < 100; ++i)
+                Advance(33);
+            lv_obj_update_layout(panel);
+            int position = axis == 0 ? lv_obj_get_x(dots[2]) : lv_obj_get_y(dots[2]);
+            assert(sign > 0 ? position > (axis == 0 ? 245 : 165) : position < 10);
+            assert(game.page() == DotTapSession::Page::One);
+        }
+        accel.ax = 0;
+        accel.ay = 8192;
+        accel.az = 0;
+        for (int i = 0; i < 150; ++i)
+            Advance(33);
+        lv_obj_update_layout(panel);
+        assert(std::abs(lv_obj_get_x(dots[2]) - 128) < 5);
+        assert(std::abs(lv_obj_get_y(dots[2]) - 88) < 5);
+    }
+    game.RequestExit();
+
     // Real LVGL pointer dispatch: a drag retains the pressed dot, works in all
     // four corners, stays inside the screen, and does not count as a tap.
     accel.on = false;
     Click(entry);
+    Advance(33);
+    lv_obj_update_layout(panel);
     auto input = lv_indev_create();
     lv_indev_set_type(input, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(input, [](lv_indev_t*, lv_indev_data_t* data) {

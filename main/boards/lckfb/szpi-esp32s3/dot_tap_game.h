@@ -64,6 +64,8 @@ private:
     int tilt_origin_samples_ = 0;
     int32_t tilt_origin_sum_x_ = 0;
     int32_t tilt_origin_sum_y_ = 0;
+    int32_t tilt_origin_sum_z_ = 0;
+    int16_t tilt_origin_z_ = 0;
     int16_t tilt_origin_x_ = 0;
     int16_t tilt_origin_y_ = 0;
     DotRoll roll_;

@@ -17,6 +17,8 @@ class DotTapGameTests(unittest.TestCase):
 #include "shake_detector.h"
 #include <cassert>
 #include <limits>
+#include <cmath>
+#include <initializer_list>
 int main() {
  using S = DotTapSession; using P = S::Page;
  S s;
@@ -91,12 +93,42 @@ int main() {
  DotRoll::Map(200, 0, 8192, px, py);
  assert(px == 0);  // inside the deadzone
 
- // The holding pose at entry is neutral, including a non-level board.
- DotRoll::MapRelative(5000,-2000,5000,-2000,px,py);assert(px==0&&py==0);
- DotRoll::MapRelative(6800,-2000,5000,-2000,px,py);assert(px < -200 && py==0);
- DotRoll::MapRelative(3200,-2000,5000,-2000,px,py);assert(px > 200 && py==0);
- DotRoll::MapRelative(5000,-200,5000,-2000,px,py);assert(py > 200 && px==0);
- DotRoll::MapRelative(5000,-3800,5000,-2000,px,py);assert(py < -200 && px==0);
+ // Realistic 3D gravity at flat, oblique and upright neutral poses. The
+ // upright +/- pitch samples have identical Y but opposite Z: old XY-only
+ // subtraction drives both toward the same edge. Require all four edges,
+ // reversal, neutral return and resistance to acceleration magnitude changes.
+ constexpr float pi=3.14159265358979323846f;
+ auto raw=[](float x){return int16_t(std::lround(x*8192.f));};
+ for(float hold : {0.f,30.f,60.f,85.f,90.f}) {
+  float h=hold*pi/180.f, ny=std::sin(h), nz=std::cos(h);
+  for(int axis=0;axis<2;++axis) {
+   DotRoll moving; moving.NoteHome(2,128,88,true);
+   for(int sign : {1,-1}) {
+    float angle=sign*15.f*pi/180.f;
+    float x=0,y=0,z=0;
+    if(axis==0) { // Rotate around the low-side roll axis.
+     x=-std::sin(angle);y=ny*std::cos(angle);z=nz*std::cos(angle);
+    } else { // Pitch about screen-right; Z preserves the direction upright.
+     y=ny*std::cos(angle)+nz*std::sin(angle);
+     z=nz*std::cos(angle)-ny*std::sin(angle);
+    }
+    assert(DotRoll::MapRelative(raw(x),raw(y),raw(z),0,raw(ny),raw(nz),px,py));
+    int active=axis==0?px:py, other=axis==0?py:px;
+    assert(sign*active>350 && std::abs(other)<2);
+    for(int i=0;i<100;++i) moving.Step(px,py,33);
+    float position=axis==0?moving.body(2).x:moving.body(2).y;
+    assert(sign>0 ? position>(axis==0?245:165) : position<10);
+   }
+   DotRoll::MapRelative(0,raw(ny),raw(nz),0,raw(ny),raw(nz),px,py);
+   assert(px==0 && py==0);
+   for(int i=0;i<150;++i) moving.Step(px,py,33);
+   assert(std::abs(moving.body(2).x-128)<5 && std::abs(moving.body(2).y-88)<5);
+  }
+  DotRoll::MapRelative(0,raw(ny*.9f),raw(nz*.9f),0,raw(ny),raw(nz),px,py);
+  assert(px==0 && py==0);
+ }
+ assert(!DotRoll::MapRelative(0,0,0,0,0,8192,px,py) && px==0 && py==0);
+ assert(!DotRoll::MapRelative(0,0,20000,0,0,8192,px,py) && px==0 && py==0);
  DotRoll gentle;gentle.NoteHome(2,128,88,true);
  for(int i=0;i<60;++i) gentle.Step(250,0,33);
  assert(gentle.body(2).x > 225); // ~14 degree tilt reaches near the edge
