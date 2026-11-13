@@ -1,4 +1,5 @@
 #include "clock_tool.h"
+#include "home_entry_layout.h"
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 #include <cstdio>
 #include "application.h"
@@ -76,8 +77,7 @@ void ClockTool::Initialize() {
         200, this);
 }
 void ClockTool::Tick() {
-    if (entry_)
-        lv_obj_set_y(entry_, display_->GetTopBarBottom() + 4 + 4 * 40);
+    PositionHomeEntry(entry_, display_, 4);
     if (!visible_.load())
         return;
     const time_t now = now_ ? now_() : std::time(nullptr);

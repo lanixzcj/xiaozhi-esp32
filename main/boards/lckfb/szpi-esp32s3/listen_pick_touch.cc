@@ -1,4 +1,5 @@
 #include "listen_pick_touch.h"
+#include "home_entry_layout.h"
 
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 
@@ -216,13 +217,7 @@ void ListenPickTouch::Initialize() {
         100, this);
 }
 
-void ListenPickTouch::UpdateEntryPosition() {
-    if (!entry_)
-        return;
-    const int y = display_->GetTopBarBottom() + 4 + entry_row_ * 40;
-    if (lv_obj_get_y(entry_) != y)
-        lv_obj_set_y(entry_, y);
-}
+void ListenPickTouch::UpdateEntryPosition() { PositionHomeEntry(entry_, display_, entry_row_); }
 
 void ListenPickTouch::Enter() {
     auto& app = Application::GetInstance();

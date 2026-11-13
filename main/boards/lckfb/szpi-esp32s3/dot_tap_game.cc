@@ -1,4 +1,5 @@
 #include "dot_tap_game.h"
+#include "home_entry_layout.h"
 
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 
@@ -285,13 +286,7 @@ void DotTapGame::Initialize() {
         33, this);
 }
 
-void DotTapGame::UpdateEntryPosition() {
-    if (!entry_)
-        return;
-    const int y = display_->GetTopBarBottom() + 4 + 2 * 40;
-    if (lv_obj_get_y(entry_) != y)
-        lv_obj_set_y(entry_, y);
-}
+void DotTapGame::UpdateEntryPosition() { PositionHomeEntry(entry_, display_, 2); }
 
 void DotTapGame::Enter() {
     auto& app = Application::GetInstance();

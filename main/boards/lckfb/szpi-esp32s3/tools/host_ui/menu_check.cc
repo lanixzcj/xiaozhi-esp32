@@ -31,10 +31,27 @@ int main(int argc, char** argv) {
     for (int row = 0; row < 5; ++row) {
         auto entry = lv_obj_get_child(layer, row * 2);
         assert(lv_obj_get_x(entry) == 240);
-        assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4 + row * 40);
-        assert(lv_obj_get_width(entry) == 72 && lv_obj_get_height(entry) == 38);
+        assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4 + row * 35);
+        assert(lv_obj_get_width(entry) == 72 && lv_obj_get_height(entry) == 32);
+        // Reserve the entire bottom 40 px even before a reply arrives.
+        lv_area_t bounds;
+        lv_obj_get_coords(entry, &bounds);
+        assert(bounds.y2 < 200);
+        if (row > 0) {
+            auto previous = lv_obj_get_child(layer, (row - 1) * 2);
+            assert(lv_obj_get_y(previous) + lv_obj_get_height(previous) < bounds.y1);
+        }
         assert(lv_obj_has_flag(lv_obj_get_child(layer, row * 2 + 1), LV_OBJ_FLAG_HIDDEN));
     }
+    auto caption = lv_obj_create(layer);
+    lv_obj_set_size(caption, 320, 40);
+    lv_obj_set_pos(caption, 0, 200);
+    lv_obj_set_style_pad_all(caption, 0, 0);
+    lv_obj_set_style_border_width(caption, 0, 0);
+    auto text = lv_label_create(caption);
+    lv_label_set_text(text, "XiaoZhi reply: ABCDEFGHIJKLMNOP");
+    lv_obj_center(text);
+    lv_obj_update_layout(layer);
     auto image = lv_snapshot_take(layer, LV_COLOR_FORMAT_RGB888);
     assert(image);
     const char* target = argc > 1 ? argv[1] : "right-menu.ppm";

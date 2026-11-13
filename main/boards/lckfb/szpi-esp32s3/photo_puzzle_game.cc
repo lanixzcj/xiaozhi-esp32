@@ -1,4 +1,5 @@
 #include "photo_puzzle_game.h"
+#include "home_entry_layout.h"
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 #include <algorithm>
 #include <cstdlib>
@@ -88,10 +89,7 @@ void PhotoPuzzleGame::Initialize() {
         },
         500, this);
 }
-void PhotoPuzzleGame::UpdateEntryPosition() {
-    if (entry_)
-        lv_obj_set_y(entry_, display_->GetTopBarBottom() + 4 + 3 * 40);
-}
+void PhotoPuzzleGame::UpdateEntryPosition() { PositionHomeEntry(entry_, display_, 3); }
 void PhotoPuzzleGame::Enter() {
     auto& app = Application::GetInstance();
     if (visible_.load() || app.IsLocalInteractionActive() || !app.BeginLocalInteraction())
