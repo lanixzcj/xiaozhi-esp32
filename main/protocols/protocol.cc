@@ -105,6 +105,18 @@ void Protocol::SendMcpMessage(const std::string& payload) {
     SendText(message);
 }
 
+bool Protocol::SendDotRoundRequest(uint32_t id) {
+    if (!CanSendSilentText() || id == 0) {
+        return false;
+    }
+    // speak:false tells a supporting server not to open a TTS turn. The payload
+    // is only an id; the round schema lives in the server prompt, not in speech.
+    std::string message = "{\"session_id\":\"" + session_id_ +
+                          "\",\"type\":\"dot_round\",\"speak\":false,\"id\":" + std::to_string(id) +
+                          "}";
+    return SendText(message);
+}
+
 bool Protocol::IsTimeout() const {
     const int kTimeoutSeconds = 120;
     auto now = std::chrono::steady_clock::now();

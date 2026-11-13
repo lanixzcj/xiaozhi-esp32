@@ -11,6 +11,7 @@ BOARD = ROOT / "main/boards/lckfb/szpi-esp32s3"
 class DotTapGameTests(unittest.TestCase):
     def test_session_and_shake(self):
         code = r"""
+#include "dot_round.h"
 #include "dot_tap_session.h"
 #include "dot_tilt.h"
 #include "shake_detector.h"
@@ -101,6 +102,55 @@ int main() {
  roll.NoteHome(0, 24, 14, true);
  for (int i = 0; i < 40; ++i) roll.Step(-1000, 0, 50);
  assert(roll.body(0).x <= 8);
+
+ DotRound round;
+ const char* valid =
+     "{\"gap_ms\":10,\"note\":\"hi\",\"dots\":["
+     "{\"cx\":160,\"cy\":120,\"color\":\"yellow\",\"size\":64,\"order\":2},"
+     "{\"cx\":70,\"cy\":60,\"color\":\"red\",\"size\":200,\"order\":0},"
+     "{\"cx\":250.5,\"cy\":180,\"color\":\"blue\",\"size\":10,\"order\":1}]}";
+ assert(DotRound::Parse(valid, round));
+ assert(round.count == 3);
+ assert(round.gap_ms == DotRound::kMinGapMs);
+ assert(round.dots[0].color == DotRound::Color::Yellow);
+ assert(round.dots[0].x == 160 - 32 && round.dots[0].y == 120 - 32);
+ assert(round.dots[1].size == DotRound::kMaxSize);
+ assert(round.dots[1].order == 0);
+ assert(round.dots[2].size == DotRound::kMinSize);
+ const char* wild =
+     "{\"dots\":[{\"cx\":-40,\"cy\":900,\"color\":\"yellow\",\"size\":80}]}";
+ assert(DotRound::Parse(wild, round));
+ assert(round.count == 1);
+ assert(round.dots[0].x >= DotRound::kMargin);
+ assert(round.dots[0].y + round.dots[0].size <= DotRound::kScreenH - DotRound::kMargin);
+ assert(!DotRound::Parse("not json", round));
+ assert(!DotRound::Parse("{\"dots\":[]}", round));
+ assert(!DotRound::Parse("{\"dots\":[{\"cx\":10,\"color\":\"green\"}]}", round));
+ assert(!DotRound::Parse(
+     "{\"dots\":[{},{},{},{},{},{\"cx\":1,\"cy\":1,\"color\":\"red\"}]}", round));
+ assert(!DotRound::Parse("", round));
+
+ DotRoundQueue queue;
+ uint32_t id = queue.Begin(0);
+ assert(id == 1 && queue.inflight());
+ assert(!queue.Take(round));
+ assert(queue.OnReply(id, valid));
+ assert(queue.Has() && queue.Take(round) && round.count == 3);
+ assert(!queue.OnReply(id, valid));
+ id = queue.Begin(100);
+ assert(!queue.TimedOut(100 + 1499));
+ queue.Expire();
+ assert(!queue.inflight() && queue.failures() == 1);
+ assert(!queue.OnReply(id, valid));
+ assert(!queue.Offer("{\"dots\":[{\"cx\":1,\"cy\":1,\"color\":\"purple\"}]}"));
+ assert(queue.Offer(wild));
+ assert(queue.Take(round) && round.dots[0].size == 80);
+
+ DotTapSession custom;
+ custom.Start(0);
+ assert(custom.EnterCustom(0) && custom.page() == P::Custom);
+ assert(custom.Tap(1, 0) && custom.page() == P::Custom);
+ assert(custom.Shake(2) && custom.page() == P::Scattering);
 }
 """
         with tempfile.TemporaryDirectory() as temporary:

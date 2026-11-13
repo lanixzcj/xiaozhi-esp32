@@ -66,6 +66,9 @@ public:
     virtual void SendStopListening();
     virtual void SendAbortSpeaking(AbortReason reason);
     virtual void SendMcpMessage(const std::string& message);
+    // Silent layout request. Does not open the audio channel and does not start
+    // listening. Returns false when the text transport is down.
+    bool SendDotRoundRequest(uint32_t id);
 
 protected:
     std::function<void(const cJSON* root)> on_incoming_json_;
@@ -83,6 +86,8 @@ protected:
     std::chrono::time_point<std::chrono::steady_clock> last_incoming_time_;
 
     virtual bool SendText(const std::string& text) = 0;
+    // MQTT stays connected after the audio channel closes. WebSocket does not.
+    virtual bool CanSendSilentText() const { return false; }
     virtual void SetError(const std::string& message);
     void SetError(const std::string& message, const std::string& detail);
     virtual bool IsTimeout() const;

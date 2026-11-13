@@ -7,7 +7,7 @@
 // pixels. kLimitMs only opens the rest page when the game was left running.
 class DotTapSession {
 public:
-    enum class Page { Closed, One, Five, Mixed, Scattering, Settling, Settled, Rest };
+    enum class Page { Closed, One, Five, Mixed, Custom, Scattering, Settling, Settled, Rest };
 
     static constexpr int kDots = 5;
     static constexpr int kCenter = 2;
@@ -46,6 +46,7 @@ public:
                 page_ = Page::Mixed;
                 return true;
             case Page::Mixed:
+            case Page::Custom:
                 if (index < 0 || index >= kDots) {
                     return false;
                 }
@@ -60,8 +61,22 @@ public:
         }
     }
 
+    // A validated model layout replaces the next built-in page. Taps stay local.
+    bool EnterCustom(uint32_t now) {
+        if (page_ != Page::One && page_ != Page::Five && page_ != Page::Settled) {
+            return false;
+        }
+        if (!Alive(now)) {
+            page_ = Page::Rest;
+            return false;
+        }
+        last_tap_ = -1;
+        page_ = Page::Custom;
+        return true;
+    }
+
     bool Shake(uint32_t now) {
-        if (page_ != Page::Mixed || !Alive(now)) {
+        if ((page_ != Page::Mixed && page_ != Page::Custom) || !Alive(now)) {
             return false;
         }
         mark_ = now;

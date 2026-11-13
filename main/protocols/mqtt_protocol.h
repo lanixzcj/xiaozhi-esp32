@@ -64,6 +64,7 @@ private:
     bool CryptAesCtr(const uint8_t* input, size_t input_size, const uint8_t* nonce, uint8_t* output);
 
     bool SendText(const std::string& text) override;
+    bool CanSendSilentText() const override;
     std::string GetHelloMessage();
 };
 

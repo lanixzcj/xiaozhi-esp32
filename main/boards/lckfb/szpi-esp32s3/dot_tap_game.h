@@ -11,6 +11,7 @@
 
 #include "accel_source.h"
 #include "display.h"
+#include "dot_round.h"
 #include "dot_tap_session.h"
 #include "dot_tilt.h"
 #include "shake_detector.h"
@@ -29,6 +30,8 @@ public:
 
     void Initialize();
     void RequestExit();
+    // Host tests and the silent round reply. Invalid JSON returns false.
+    bool SubmitRoundJson(const char* json);
     bool IsVisible() const { return visible_.load(); }
     DotTapSession::Page page() const { return session_.page(); }
 
@@ -54,6 +57,8 @@ private:
     uint32_t generation_ = 0;
     int read_failures_ = 0;
     DotRoll roll_;
+    DotRoundQueue rounds_;
+    DotRound custom_{};
     uint32_t pose_lock_until_ = 0;
     uint32_t last_tilt_ms_ = 0;
     bool tilt_synced_ = false;
@@ -67,8 +72,11 @@ private:
     void Restart();
     void OnShake(uint32_t now);
     void ApplyTilt(uint32_t now, int pull_x_mg, int pull_y_mg);
+    void RequestRound(uint32_t now);
+    void ShowCustom(const DotRound& round);
     void ShowPage(DotTapSession::Page page);
-    void ShowDot(int index, int x, int y, uint32_t color, Motion motion, int scale, uint32_t ms);
+    void ShowDot(int index, int x, int y, uint32_t color, Motion motion, int scale, uint32_t ms,
+                 int dot_size = 64, uint32_t pop_delay = 0xFFFFFFFFu);
     void HideDot(int index);
     void Bounce(int index);
     void PlayCue(int cue);

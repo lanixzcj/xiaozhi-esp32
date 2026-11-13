@@ -189,6 +189,11 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
     return true;
 }
 
+bool MqttProtocol::CanSendSilentText() const {
+    // The MQTT control connection stays up after the UDP audio channel closes.
+    return mqtt_ != nullptr && mqtt_->IsConnected() && !publish_topic_.empty();
+}
+
 bool MqttProtocol::SendText(const std::string& text) {
     if (publish_topic_.empty()) {
         return false;

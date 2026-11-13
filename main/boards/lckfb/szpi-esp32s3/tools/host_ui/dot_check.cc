@@ -248,6 +248,84 @@ int main(int argc, char** argv) {
     game.RequestExit();
     assert(!game.IsVisible());
 
+    accel.on = false;
+    Click(entry);
+    assert(game.page() == DotTapSession::Page::One);
+    const char* round_a =
+        "{\"gap_ms\":140,\"dots\":["
+        "{\"cx\":160,\"cy\":120,\"color\":\"yellow\",\"size\":64,\"order\":0},"
+        "{\"cx\":70,\"cy\":70,\"color\":\"red\",\"size\":64,\"order\":1},"
+        "{\"cx\":250,\"cy\":170,\"color\":\"blue\",\"size\":64,\"order\":2}]}";
+    assert(game.SubmitRoundJson(round_a));
+    Click(dots[2]);
+    assert(game.page() == DotTapSession::Page::Custom);
+    assert(!Hidden(dots[0]) && !Hidden(dots[1]) && !Hidden(dots[2]));
+    assert(Hidden(dots[3]) && Hidden(dots[4]));
+    assert(ColorIs(dots[0], 0xF5C400));
+    assert(ColorIs(dots[1], 0xE23B3B));
+    assert(ColorIs(dots[2], 0x2E7BD6));
+    Advance(520);
+    lv_obj_update_layout(panel);
+    Snapshot("round-model-a");
+
+    auto FinishCustom = [&]() {
+        lv_obj_send_event(panel, LV_EVENT_PRESSED, nullptr);
+        int guard = 0;
+        while (game.page() == DotTapSession::Page::Custom && guard++ < 40) {
+            Advance(50);
+        }
+        lv_obj_send_event(panel, LV_EVENT_RELEASED, nullptr);
+        Click(panel);
+        guard = 0;
+        while (game.page() != DotTapSession::Page::Settled && guard++ < 40) {
+            Advance(50);
+        }
+        assert(game.page() == DotTapSession::Page::Settled);
+    };
+    FinishCustom();
+
+    const char* round_b =
+        "{\"dots\":["
+        "{\"cx\":90,\"cy\":120,\"color\":\"blue\",\"size\":72,\"order\":0},"
+        "{\"cx\":230,\"cy\":120,\"color\":\"red\",\"size\":72,\"order\":1}]}";
+    assert(game.SubmitRoundJson(round_b));
+    Click(panel);
+    assert(game.page() == DotTapSession::Page::Custom);
+    assert(ColorIs(dots[0], 0x2E7BD6));
+    assert(ColorIs(dots[1], 0xE23B3B));
+    assert(Hidden(dots[2]));
+    Advance(520);
+    lv_obj_update_layout(panel);
+    Snapshot("round-model-b");
+    FinishCustom();
+
+    const char* round_c =
+        "{\"dots\":["
+        "{\"cx\":-40,\"cy\":900,\"color\":\"yellow\",\"size\":200,\"order\":0},"
+        "{\"cx\":400,\"cy\":-20,\"color\":\"red\",\"size\":10,\"order\":1}]}";
+    assert(game.SubmitRoundJson(round_c));
+    Click(panel);
+    assert(game.page() == DotTapSession::Page::Custom);
+    lv_obj_update_layout(panel);
+    for (int index = 0; index < 2; ++index) {
+        const int x = lv_obj_get_x(dots[index]);
+        const int y = lv_obj_get_y(dots[index]);
+        const int size = lv_obj_get_width(dots[index]);
+        assert(size >= 56 && size <= 80);
+        assert(x >= 4 && y >= 4);
+        assert(x + size <= 316 && y + size <= 236);
+    }
+    Advance(520);
+    Snapshot("round-model-c");
+    FinishCustom();
+
+    assert(!game.SubmitRoundJson("not json"));
+    assert(!game.SubmitRoundJson("{\"dots\":[{\"cx\":10,\"color\":\"green\"}]}"));
+    Click(panel);
+    assert(game.page() == DotTapSession::Page::One);
+    game.RequestExit();
+    assert(!game.IsVisible());
+
     lv_mem_monitor_t before{}, after{};
     lv_mem_monitor(&before);
     accel.on = false;

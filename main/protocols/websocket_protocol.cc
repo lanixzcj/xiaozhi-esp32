@@ -67,6 +67,11 @@ bool WebsocketProtocol::SendText(const std::string& text) {
     return true;
 }
 
+bool WebsocketProtocol::CanSendSilentText() const {
+    // The game closes this socket. Reopening it would start a voice session.
+    return websocket_ != nullptr && websocket_->IsConnected() && !error_occurred_;
+}
+
 bool WebsocketProtocol::IsAudioChannelOpened() const {
     return websocket_ != nullptr && websocket_->IsConnected() && !error_occurred_ && !IsTimeout();
 }

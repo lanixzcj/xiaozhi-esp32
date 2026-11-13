@@ -37,6 +37,7 @@ public:
         float vy = 0;
         float home_x = 0;
         float home_y = 0;
+        float size = kDot;
         bool alive = false;
     };
 
@@ -47,7 +48,7 @@ public:
         pull_y_mg = ClampPull(kSignY * MilliG(ay));
     }
 
-    void NoteHome(int index, float x, float y, bool alive) {
+    void NoteHome(int index, float x, float y, bool alive, float size = kDot) {
         if (index < 0 || index >= kDots) {
             return;
         }
@@ -58,6 +59,7 @@ public:
         body.y = y;
         body.vx = 0;
         body.vy = 0;
+        body.size = size < 1.f ? float(kDot) : size;
         body.alive = alive;
     }
 
@@ -76,13 +78,13 @@ public:
         const float gx = (pull_x_mg / 1000.f) * kGravity;
         const float gy = (pull_y_mg / 1000.f) * kGravity;
         const float min_x = float(kMargin);
-        const float max_x = float(kScreenW - kDot - kMargin);
         const float min_y = float(kMargin);
-        const float max_y = float(kScreenH - kDot - kMargin);
         for (auto& body : bodies_) {
             if (!body.alive) {
                 continue;
             }
+            const float max_x = float(kScreenW) - body.size - float(kMargin);
+            const float max_y = float(kScreenH) - body.size - float(kMargin);
             body.vx += (kSpring * (body.home_x - body.x) + gx) * dt;
             body.vy += (kSpring * (body.home_y - body.y) + gy) * dt;
             body.vx *= keep;

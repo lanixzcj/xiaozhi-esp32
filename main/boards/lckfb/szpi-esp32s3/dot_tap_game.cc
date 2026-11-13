@@ -233,6 +233,15 @@ void DotTapGame::Initialize() {
         lv_obj_add_event_cb(dot, on_event, LV_EVENT_ALL, this);
     }
 
+    Application::GetInstance().SetDotRoundHandler([this](uint32_t id, const std::string& json) {
+        if (!visible_.load()) {
+            return;
+        }
+        if (!rounds_.OnReply(id, json.c_str()) && rounds_.failures() < DotRoundQueue::kMaxTries) {
+            RequestRound(lv_tick_get());
+        }
+    });
+
     lv_timer_create(
         [](lv_timer_t* timer) {
             auto* self = static_cast<DotTapGame*>(lv_timer_get_user_data(timer));
@@ -266,10 +275,12 @@ void DotTapGame::Enter() {
     pressed_.store(false);
     fallback_latched_.store(false);
     visible_.store(true);
+    rounds_.Reset();
     lv_obj_add_flag(entry_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(panel_);
     ShowPage(DotTapSession::Page::One);
+    RequestRound(lv_tick_get());
 }
 
 void DotTapGame::RequestExit() {
@@ -288,6 +299,7 @@ void DotTapGame::Exit() {
     }
     pressed_.store(false);
     visible_.store(false);
+    rounds_.Reset();
     lv_obj_add_flag(panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(rest_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(entry_, LV_OBJ_FLAG_HIDDEN);
@@ -315,7 +327,9 @@ void DotTapGame::Poll() {
         } else {
             read_failures_ = 0;
             have_accel = true;
-            if (shake_.Feed(ax, ay, az, now) && page == DotTapSession::Page::Mixed) {
+            const bool shake_page = page == DotTapSession::Page::Mixed ||
+                                    page == DotTapSession::Page::Custom;
+            if (shake_.Feed(ax, ay, az, now) && shake_page) {
                 shook = true;
             }
         }
@@ -327,7 +341,10 @@ void DotTapGame::Poll() {
     }
     if (shook) {
         OnShake(now);
-    } else if (fallback && session_.page() == DotTapSession::Page::Mixed && pressed_.load() &&
+    } else if (fallback &&
+               (session_.page() == DotTapSession::Page::Mixed ||
+                session_.page() == DotTapSession::Page::Custom) &&
+               pressed_.load() &&
                !fallback_latched_.load() &&
                uint32_t(now - pressed_at_.load()) >= kFallbackHoldMs) {
         fallback_latched_.store(true);
@@ -350,13 +367,32 @@ void DotTapGame::Poll() {
     if (have_accel) {
         DotRoll::Map(ax, ay, az, pull_x, pull_y);
     }
+    if (rounds_.TimedOut(now)) {
+        rounds_.Expire();
+        if (rounds_.failures() < DotRoundQueue::kMaxTries) {
+            RequestRound(now);
+        }
+    }
     ApplyTilt(now, pull_x, pull_y);
+}
+
+bool DotTapGame::SubmitRoundJson(const char* json) { return rounds_.Offer(json); }
+
+void DotTapGame::RequestRound(uint32_t now) {
+    const uint32_t id = rounds_.Begin(now);
+    if (id == 0) {
+        return;
+    }
+    if (!Application::GetInstance().SendDotRoundRequest(id)) {
+        rounds_.AbortSend();
+    }
 }
 
 void DotTapGame::ApplyTilt(uint32_t now, int pull_x_mg, int pull_y_mg) {
     const auto page = session_.page();
     const bool tilt = page == DotTapSession::Page::One || page == DotTapSession::Page::Five ||
-                      page == DotTapSession::Page::Mixed || page == DotTapSession::Page::Settled;
+                      page == DotTapSession::Page::Mixed || page == DotTapSession::Page::Custom ||
+                      page == DotTapSession::Page::Settled;
     if (!tilt || now < pose_lock_until_) {
         tilt_synced_ = false;
         return;
@@ -395,6 +431,25 @@ void DotTapGame::Action(uint32_t generation, int index) {
         return;
     }
     const auto before = session_.page();
+    const bool advancing = before == DotTapSession::Page::One ||
+                           before == DotTapSession::Page::Five ||
+                           before == DotTapSession::Page::Settled;
+    if (advancing && rounds_.Has()) {
+        const uint32_t now = lv_tick_get();
+        if (!session_.EnterCustom(now)) {
+            ShowPage(session_.page());
+            return;
+        }
+        DotRound round;
+        rounds_.Take(round);
+        ShowCustom(round);
+        RequestRound(now);
+        PlayCue(CueFor(round.dots[0].color == DotRound::Color::Red
+                           ? kRed
+                           : round.dots[0].color == DotRound::Color::Blue ? kBlue
+                                                                          : kYellow));
+        return;
+    }
     if (!session_.Tap(lv_tick_get(), index)) {
         return;
     }
@@ -404,7 +459,17 @@ void DotTapGame::Action(uint32_t generation, int index) {
         app.GetAudioService().ResetDecoder();
         return;
     }
-    if (before == DotTapSession::Page::Mixed && after == DotTapSession::Page::Mixed) {
+    if ((before == DotTapSession::Page::Mixed || before == DotTapSession::Page::Custom) &&
+        after == before) {
+        if (before == DotTapSession::Page::Custom && index >= 0 && index < custom_.count) {
+            const auto color = custom_.dots[index].color;
+            PlayCue(CueFor(color == DotRound::Color::Red
+                               ? kRed
+                               : color == DotRound::Color::Blue ? kBlue
+                                                                : kYellow));
+            Bounce(index);
+            return;
+        }
         if (index >= 0 && index < DotTapSession::kDots) {
             PlayCue(CueFor(kMixed[index].color));
             Bounce(index);
@@ -431,6 +496,7 @@ void DotTapGame::Restart() {
     pressed_.store(false);
     fallback_latched_.store(false);
     ShowPage(DotTapSession::Page::One);
+    RequestRound(lv_tick_get());
 }
 
 void DotTapGame::OnShake(uint32_t now) {
@@ -439,6 +505,40 @@ void DotTapGame::OnShake(uint32_t now) {
     }
     PlayCue(static_cast<int>(dot_tap_sounds::Cue::Scatter));
     ShowPage(DotTapSession::Page::Scattering);
+}
+
+void DotTapGame::ShowCustom(const DotRound& round) {
+    custom_ = round;
+    tilt_synced_ = false;
+    lv_obj_add_flag(rest_, LV_OBJ_FLAG_HIDDEN);
+    int rank[DotRound::kMaxDots] = {};
+    for (int i = 0; i < round.count; ++i) {
+        for (int j = 0; j < round.count; ++j) {
+            const bool before = round.dots[j].order < round.dots[i].order ||
+                                (round.dots[j].order == round.dots[i].order && j < i);
+            if (before) {
+                ++rank[i];
+            }
+        }
+    }
+    uint32_t last_delay = 0;
+    for (int i = 0; i < DotTapSession::kDots; ++i) {
+        if (i >= round.count) {
+            HideDot(i);
+            continue;
+        }
+        const auto& dot = round.dots[i];
+        const uint32_t color = dot.color == DotRound::Color::Red
+                                   ? kRed
+                                   : dot.color == DotRound::Color::Blue ? kBlue
+                                                                        : kYellow;
+        const uint32_t delay = uint32_t(rank[i]) * uint32_t(round.gap_ms);
+        if (delay > last_delay) {
+            last_delay = delay;
+        }
+        ShowDot(i, dot.x, dot.y, color, Motion::Pop, LV_SCALE_NONE, 0, dot.size, delay);
+    }
+    pose_lock_until_ = lv_tick_get() + last_delay + 220;
 }
 
 void DotTapGame::ShowPage(DotTapSession::Page page) {
@@ -506,19 +606,26 @@ void DotTapGame::ShowPage(DotTapSession::Page page) {
 }
 
 void DotTapGame::ShowDot(int index, int x, int y, uint32_t color, Motion motion, int scale,
-                         uint32_t ms) {
-    roll_.NoteHome(index, float(x), float(y), true);
+                         uint32_t ms, int dot_size, uint32_t pop_delay) {
+    if (dot_size < DotRound::kMinSize) {
+        dot_size = DotRound::kMinSize;
+    }
+    roll_.NoteHome(index, float(x), float(y), true, float(dot_size));
     auto* dot = dots_[index];
     lv_anim_delete(dot, SetX);
     lv_anim_delete(dot, SetY);
     lv_anim_delete(dot, SetScale);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_size(dot, dot_size, dot_size);
+    lv_obj_set_style_transform_pivot_x(dot, dot_size / 2, 0);
+    lv_obj_set_style_transform_pivot_y(dot, dot_size / 2, 0);
     lv_obj_set_style_bg_color(dot, lv_color_hex(color), 0);
     if (motion == Motion::Pop) {
         lv_obj_set_pos(dot, x, y);
         scale_[index] = LV_SCALE_NONE;
         SetScale(dot, 96);
-        Animate(dot, SetScale, 96, LV_SCALE_NONE, 220, uint32_t(index) * 40, lv_anim_path_ease_out);
+        const uint32_t delay = pop_delay == 0xFFFFFFFFu ? uint32_t(index) * 40 : pop_delay;
+        Animate(dot, SetScale, 96, LV_SCALE_NONE, 220, delay, lv_anim_path_ease_out);
         return;
     }
     if ((motion == Motion::Glide || motion == Motion::Arrive) && ms > 0) {
