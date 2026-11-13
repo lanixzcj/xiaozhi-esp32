@@ -1,9 +1,9 @@
 #include <cassert>
 #include <cstdio>
 #include <string>
-#include "animal_game_photos.h"
 #include "application.h"
 #include "photo_puzzle_game.h"
+#include "puzzle_game_assets.h"
 LV_FONT_DECLARE(animal_game_font);
 static lv_point_t finger{0, 0};
 static lv_indev_state_t state = LV_INDEV_STATE_RELEASED;
@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
     auto ghost = lv_obj_get_child(panel, 0), title = lv_obj_get_child(panel, 1);
     auto a = lv_obj_get_child(panel, 2), b = lv_obj_get_child(panel, 3),
          next = lv_obj_get_child(panel, 5);
+    auto preview = lv_obj_get_child(panel, 6);
     app.active = true;
     Click(entry);
     assert(!game.IsVisible());
@@ -73,9 +74,11 @@ int main(int argc, char** argv) {
     Advance(40);
     lv_obj_update_layout(layer);
     assert(game.IsVisible() && app.active);
-    assert(lv_image_get_src(ghost) == animal_game_photo(2));
+    assert(lv_image_get_src(ghost) == puzzle_game_assets::GetImage(0));
     assert(!lv_obj_has_flag(a, LV_OBJ_FLAG_OVERFLOW_VISIBLE));
     assert(lv_obj_get_width(a) == 148 && lv_obj_get_height(a) == 162);
+    assert(lv_image_get_src(preview) == puzzle_game_assets::GetPreview(0));
+    assert(!lv_obj_has_flag(preview, LV_OBJ_FLAG_HIDDEN));
     if (argc > 1)
         Snapshot(argv[1]);
     auto input = lv_indev_create();
@@ -88,7 +91,7 @@ int main(int argc, char** argv) {
     assert(lv_obj_has_flag(a, LV_OBJ_FLAG_CLICKABLE));
     assert(lv_obj_has_flag(next, LV_OBJ_FLAG_HIDDEN));
     Click(next);
-    assert(lv_image_get_src(ghost) == animal_game_photo(2));
+    assert(lv_image_get_src(ghost) == puzzle_game_assets::GetImage(0));
     Drag(input, a, 30, 58);
     assert(lv_obj_get_x(a) == 12 && lv_obj_get_y(a) == 58);
     assert(!lv_obj_has_flag(a, LV_OBJ_FLAG_CLICKABLE));
@@ -98,14 +101,32 @@ int main(int argc, char** argv) {
     assert(!lv_obj_has_flag(b, LV_OBJ_FLAG_CLICKABLE));
     assert(std::string(lv_label_get_text(title)) == "找到了");
     assert(!lv_obj_has_flag(next, LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_has_flag(preview, LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_get_style_outline_width(a, LV_PART_MAIN) == 0);
+    assert(lv_obj_get_style_outline_width(b, LV_PART_MAIN) == 0);
     if (argc > 2)
         Snapshot(argv[2]);
     Advance(10000);
-    assert(lv_image_get_src(ghost) == animal_game_photo(2));
+    assert(lv_image_get_src(ghost) == puzzle_game_assets::GetImage(0));
     Click(next);
     Advance(40);
-    assert(lv_image_get_src(ghost) == animal_game_photo(4));
+    assert(lv_image_get_src(ghost) == puzzle_game_assets::GetImage(1));
     assert(lv_obj_has_flag(a, LV_OBJ_FLAG_CLICKABLE) && lv_obj_has_flag(b, LV_OBJ_FLAG_CLICKABLE));
+    for (size_t index = 1; index < puzzle_game_assets::kCount; ++index) {
+        assert(lv_image_get_src(preview) == puzzle_game_assets::GetPreview(index));
+        Drag(input, a, 12, 58);
+        Drag(input, b, 160, 58);
+        assert(!lv_obj_has_flag(next, LV_OBJ_FLAG_HIDDEN));
+        if (argc > 3) {
+            char path[512];
+            snprintf(path, sizeof(path), "%s/puzzle-%zu-complete.ppm", argv[3], index);
+            Snapshot(path);
+        }
+        Click(next);
+        Advance(40);
+    }
+    assert(lv_image_get_src(ghost) == puzzle_game_assets::GetImage(0));
+    assert(puzzle_game_assets::GetImage(puzzle_game_assets::kCount) == nullptr);
     app.EndLocalInteraction();
     Advance(500);
     assert(!game.IsVisible() && !app.active);

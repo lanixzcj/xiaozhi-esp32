@@ -2,8 +2,8 @@
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 #include <algorithm>
 #include <cstdlib>
-#include "animal_game_photos.h"
 #include "application.h"
+#include "puzzle_game_assets.h"
 LV_FONT_DECLARE(animal_game_font);
 namespace {
 constexpr int kW = 148, kH = 162, kX = 12, kY = 58;
@@ -65,6 +65,11 @@ void PhotoPuzzleGame::Initialize() {
     }
     auto back = Button(panel_, "返回", 8, 6, 72);
     next_ = Button(panel_, "再玩", 216, 6, 96);
+    preview_ = lv_image_create(panel_);
+    lv_obj_set_pos(preview_, 108, 4);
+    lv_obj_set_size(preview_, 80, 44);
+    // Native-size preview avoids indexed-image scaling on the embedded renderer.
+    lv_obj_remove_flag(preview_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(entry_, Event, LV_EVENT_SHORT_CLICKED, this);
     lv_obj_add_event_cb(
         back,
@@ -104,9 +109,12 @@ void PhotoPuzzleGame::Enter() {
     Round();
 }
 void PhotoPuzzleGame::Round() {
-    constexpr size_t photos[] = {2, 4, 5, 3};  // duck, cow, sheep, chicken
-    auto photo = animal_game_photo(photos[round_ % 4]);
+    auto photo = puzzle_game_assets::GetImage(round_ % puzzle_game_assets::kCount);
     lv_image_set_src(ghost_, photo);
+    lv_obj_set_style_outline_color(ghost_, lv_color_hex(0xC9B887), 0);
+    lv_image_set_src(preview_, puzzle_game_assets::GetPreview(round_ % puzzle_game_assets::kCount));
+    lv_obj_remove_flag(preview_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(title_, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(title_, "拖一拖");
     lv_obj_add_flag(next_, LV_OBJ_FLAG_HIDDEN);
     drag_ = -1;
@@ -114,7 +122,8 @@ void PhotoPuzzleGame::Round() {
         placed_[i] = false;
         lv_image_set_src(images_[i], photo);
         lv_obj_set_pos(pieces_[i], kX + (1 - i) * kW, kY);
-        lv_obj_set_style_outline_width(pieces_[i], 0, 0);
+        lv_obj_set_style_outline_color(pieces_[i], lv_color_hex(0xC9B887), 0);
+        lv_obj_set_style_outline_width(pieces_[i], 2, 0);
         lv_obj_add_flag(pieces_[i], LV_OBJ_FLAG_CLICKABLE);
         lv_obj_move_foreground(pieces_[i]);
     }
@@ -159,6 +168,12 @@ void PhotoPuzzleGame::Release() {
     lv_obj_set_style_outline_color(piece, lv_color_hex(0x58965B), 0);
     lv_obj_set_style_outline_width(piece, 2, 0);
     if (placed_[0] && placed_[1]) {
+        // The complete picture has no internal success border covering it.
+        for (auto part : pieces_)
+            lv_obj_set_style_outline_width(part, 0, 0);
+        lv_obj_set_style_outline_color(ghost_, lv_color_hex(0x58965B), 0);
+        lv_obj_add_flag(preview_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(title_, LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(title_, "找到了");
         lv_obj_remove_flag(next_, LV_OBJ_FLAG_HIDDEN);
     }

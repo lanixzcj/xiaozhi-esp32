@@ -5,8 +5,8 @@
 #include <atomic>
 #include "display.h"
 
-// Two large photo halves. No timers, scores, automatic advance or tilt input.
-// Reuses the licensed animal photos without allocating transformed image layers.
+// Two large illustration halves. No timers, scores, automatic advance or tilt input.
+// Uses original flat vector assets without allocating transformed image layers.
 class PhotoPuzzleGame {
 public:
     explicit PhotoPuzzleGame(Display* display) : display_(display) {}
@@ -19,6 +19,7 @@ private:
     lv_obj_t* entry_ = nullptr;
     lv_obj_t* panel_ = nullptr;
     lv_obj_t* ghost_ = nullptr;
+    lv_obj_t* preview_ = nullptr;
     lv_obj_t* title_ = nullptr;
     lv_obj_t* next_ = nullptr;
     lv_obj_t* pieces_[2] = {};

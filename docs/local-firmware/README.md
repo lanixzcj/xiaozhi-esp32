@@ -100,3 +100,14 @@ the rest overlay, and its hold cannot trigger the mixed-page shake fallback.
 The two top yellow dots and the upper-right mixed dot are moved below the return
 button. BOOT still exits. Actual LVGL pointer tests cover return from all built-in
 pages, including scatter, settling and rest. Tilt, puzzle and audio are unchanged.
+
+## R7 clear illustration puzzle
+
+User feedback found the real photos unclear as a left/right puzzle. Puzzle assets
+are now original, flat apple/bus/fish illustrations, each with a large subject,
+plain background and thick outline across the center split. A complete thumbnail
+in the header shows the target. After both halves snap, internal outlines vanish
+and the complete image stays visible until manual next. Other games retain their
+existing photos, sounds, tilt behavior and touch return. Three opaque I4 images
+and their native-size previews need 77,592 pixel/palette bytes in flash; they are generated offline from vector
+primitives. Source previews and licensing are in assets/puzzle/README.md.
