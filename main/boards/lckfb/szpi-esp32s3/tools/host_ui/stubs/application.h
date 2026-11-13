@@ -1,6 +1,7 @@
 #pragma once
 #include <deque>
 #include <functional>
+#include <string>
 #include <string_view>
 class AudioService {
 public:
@@ -41,6 +42,8 @@ public:
         audio.busy = false;
     }
     bool IsLocalInteractionActive() const { return active; }
+    void SetDotRoundHandler(std::function<void(uint32_t, const std::string&)>) {}
+    bool SendDotRoundRequest(uint32_t) { return false; }
     bool PlayLocalInteractionSound(std::string_view s) {
         if (!active || audio.busy || s.empty())
             return false;

@@ -672,11 +672,16 @@ void Application::InitializeProtocol() {
     protocol_->OnIncomingJson([this, display](const cJSON* root) {
         // Capture before parsing: callbacks delayed across enter/exit must stay stale.
         const uint32_t generation = interaction_generation_.load();
+        auto type = cJSON_GetObjectItem(root, "type");
+        // A dot-round reply is data, not speech. Accept it during a local game and
+        // do not let it fall through into TTS, STT, or chat state.
+        if (cJSON_IsString(type) && strcmp(type->valuestring, "dot_round") == 0) {
+            HandleDotRound(root);
+            return;
+        }
         if (IsLocalInteractionActive()) {
             return;
         }
-        // Parse JSON data
-        auto type = cJSON_GetObjectItem(root, "type");
         if (!cJSON_IsString(type)) {
             ESP_LOGW(TAG, "Incoming JSON message has no type");
             return;
@@ -1715,6 +1720,44 @@ bool Application::CanEnterSleepMode() {
 
 void Application::RegisterMcpBroadcastCallback(std::function<void(const std::string&)> callback) {
     mcp_broadcast_callback_ = std::move(callback);
+}
+
+void Application::SetDotRoundHandler(
+    std::function<void(uint32_t id, const std::string& json)> handler) {
+    dot_round_handler_ = std::move(handler);
+}
+
+bool Application::SendDotRoundRequest(uint32_t id) {
+    if (protocol_ == nullptr) {
+        return false;
+    }
+    return protocol_->SendDotRoundRequest(id);
+}
+
+void Application::HandleDotRound(const cJSON* root) {
+    auto id = cJSON_GetObjectItem(root, "id");
+    auto round = cJSON_GetObjectItem(root, "round");
+    if (!cJSON_IsNumber(id) || id->valuedouble < 1 || id->valuedouble > 1000000000 ||
+        !cJSON_IsObject(round)) {
+        ESP_LOGW(TAG, "Ignoring dot_round reply without a numeric id and round object");
+        return;
+    }
+    char* printed = cJSON_PrintUnformatted(round);
+    if (printed == nullptr) {
+        return;
+    }
+    std::string json(printed);
+    cJSON_free(printed);
+    if (json.size() > 768) {
+        ESP_LOGW(TAG, "Ignoring oversized dot_round payload");
+        return;
+    }
+    const auto round_id = static_cast<uint32_t>(id->valuedouble);
+    Schedule([this, round_id, json = std::move(json)]() {
+        if (dot_round_handler_) {
+            dot_round_handler_(round_id, json);
+        }
+    });
 }
 
 void Application::SendMcpMessage(const std::string& payload) {

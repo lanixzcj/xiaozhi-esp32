@@ -116,6 +116,9 @@ public:
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
+    // Called on the main task with the round object JSON. No audio is started.
+    void SetDotRoundHandler(std::function<void(uint32_t id, const std::string& json)> handler);
+    bool SendDotRoundRequest(uint32_t id);
     void RegisterMcpBroadcastCallback(std::function<void(const std::string&)> callback);
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
@@ -162,6 +165,7 @@ private:
     std::unique_ptr<Ota> ota_;
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
+    std::function<void(uint32_t, const std::string&)> dot_round_handler_;
 
     bool has_server_time_ = false;
     bool startup_completed_ = false;
@@ -191,6 +195,7 @@ private:
     std::string provisioning_emotion_;
 
     void FinishLocalInteraction();
+    void HandleDotRound(const cJSON* root);
     void RestoreProvisioningAlert();
     void RunInteractionCallback(uint32_t generation, const std::function<void()>& callback);
     void ScheduleInteraction(uint32_t generation, std::function<void()>&& callback);

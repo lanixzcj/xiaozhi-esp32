@@ -309,7 +309,29 @@ WebSocket text frames carry JSON. The most common `"type"` values and their sema
      }
      ```
 
-9. **Binary audio frames**
+9. **Dot-round layout (silent)**
+   - Used by the flat-dot game to ask for the next layout without a voice turn.
+   - The device sends this only when the text transport is already up. It does not send `listen` and does not open a speaking session. `"speak": false` means the server must not emit `tts` or audio for this exchange.
+   - Request (device to server):
+     ```json
+     {"session_id": "...", "type": "dot_round", "speak": false, "id": 1}
+     ```
+   - Reply (server to device), `id` copied from the request. `round` is JSON only:
+     ```json
+     {
+       "type": "dot_round",
+       "id": 1,
+       "round": {
+         "gap_ms": 180,
+         "dots": [
+           {"cx": 160, "cy": 120, "color": "yellow", "size": 64, "order": 0}
+         ]
+       }
+     }
+     ```
+   - `dots` has 1 to 5 items. `cx` and `cy` are centers on a 320×240 screen. `color` is `yellow`, `red`, or `blue`. The device clamps `size` to 56–80 and keeps each dot fully on screen. Anything else is ignored and the built-in layouts are used. A recommended model instruction is: reply with that JSON object only, no speech and no markdown.
+
+10. **Binary audio frames**
    - When the server pushes Opus-encoded audio as binary frames, the device decodes and plays them.
    - Frames received while the device is in the `listening` state are dropped to avoid conflicts with the microphone stream.
 
