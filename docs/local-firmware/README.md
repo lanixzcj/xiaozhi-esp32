@@ -111,3 +111,22 @@ and the complete image stays visible until manual next. Other games retain their
 existing photos, sounds, tilt behavior and touch return. Three opaque I4 images
 and their native-size previews need 77,592 pixel/palette bytes in flash; they are generated offline from vector
 primitives. Source previews and licensing are in assets/puzzle/README.md.
+
+## R8 full-screen seconds clock
+
+A fifth right-column 时钟 entry opens a full-screen 52px HH:MM:SS clock with date
+and touch/BOOT return. Entry spacing is 40px, retaining 72x38 buttons; all five
+fit a 320x240 screen below the status bar. The clock reads the existing device
+system time every 200ms and only changes text when the wall-clock second changes.
+It does not increment a counter, alter TZ, start a voice turn or block ongoing
+conversation. The OTA response already applies its timezone offset before
+settimeofday; adding another UTC+8 offset would be wrong. Network time corrections
+are reflected immediately; unsynchronized startup shows --:--:-- and 等待校时.
+After synchronization it continues ticking offline until reset; network time is
+needed again when the device has no valid clock. Games and model behavior stay
+unchanged. Host tests cover seconds, midnight/date rollover, wall-time correction,
+unsynchronized state, touch exit, heap stability and five-button bounds.
+
+R7 was explicitly accepted by the user, marked VALID after app/metadata readback,
+and its R7 version was observed after a serial-triggered reset. It remains locally
+restorable before any R8 trial write; the original stable OTA1 is also preserved.

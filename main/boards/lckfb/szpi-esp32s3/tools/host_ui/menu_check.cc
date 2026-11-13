@@ -2,6 +2,7 @@
 #include <cstdio>
 
 #include "animal_touch_game.h"
+#include "clock_tool.h"
 #include "dot_tap_game.h"
 #include "photo_puzzle_game.h"
 #include "transport_touch_game.h"
@@ -19,16 +20,18 @@ int main(int argc, char** argv) {
     TransportTouchGame transport(&display);
     DotTapGame dot(&display, nullptr);
     PhotoPuzzleGame puzzle(&display);
+    ClockTool clock(&display);
     animal.Initialize();
     transport.Initialize();
     dot.Initialize();
     puzzle.Initialize();
+    clock.Initialize();
     auto layer = lv_layer_top();
     lv_obj_update_layout(layer);
-    for (int row = 0; row < 4; ++row) {
+    for (int row = 0; row < 5; ++row) {
         auto entry = lv_obj_get_child(layer, row * 2);
         assert(lv_obj_get_x(entry) == 240);
-        assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4 + row * 46);
+        assert(lv_obj_get_y(entry) == display.GetTopBarBottom() + 4 + row * 40);
         assert(lv_obj_get_width(entry) == 72 && lv_obj_get_height(entry) == 38);
         assert(lv_obj_has_flag(lv_obj_get_child(layer, row * 2 + 1), LV_OBJ_FLAG_HIDDEN));
     }

@@ -288,7 +288,7 @@ void DotTapGame::Initialize() {
 void DotTapGame::UpdateEntryPosition() {
     if (!entry_)
         return;
-    const int y = display_->GetTopBarBottom() + 4 + 2 * 46;
+    const int y = display_->GetTopBarBottom() + 4 + 2 * 40;
     if (lv_obj_get_y(entry_) != y)
         lv_obj_set_y(entry_, y);
 }

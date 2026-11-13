@@ -90,7 +90,7 @@ void PhotoPuzzleGame::Initialize() {
 }
 void PhotoPuzzleGame::UpdateEntryPosition() {
     if (entry_)
-        lv_obj_set_y(entry_, display_->GetTopBarBottom() + 4 + 3 * 46);
+        lv_obj_set_y(entry_, display_->GetTopBarBottom() + 4 + 3 * 40);
 }
 void PhotoPuzzleGame::Enter() {
     auto& app = Application::GetInstance();

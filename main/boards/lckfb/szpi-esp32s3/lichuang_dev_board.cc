@@ -1,6 +1,7 @@
 #include "animal_touch_game.h"
 #include "application.h"
 #include "button.h"
+#include "clock_tool.h"
 #include "codecs/box_audio_codec.h"
 #include "config.h"
 #include "controlled_trial.h"
@@ -80,6 +81,7 @@ private:
     TransportTouchGame* transport_game_ = nullptr;
     DotTapGame* dot_game_ = nullptr;
     PhotoPuzzleGame* puzzle_game_ = nullptr;
+    ClockTool* clock_tool_ = nullptr;
 #endif
 
     void InitializeI2c() {
@@ -120,6 +122,10 @@ private:
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
+            if (clock_tool_ && clock_tool_->IsVisible()) {
+                clock_tool_->RequestExit();
+                return;
+            }
             if (puzzle_game_ && puzzle_game_->IsVisible()) {
                 puzzle_game_->RequestExit();
                 return;
@@ -153,7 +159,8 @@ private:
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
                 (dot_game_ && dot_game_->IsVisible()) ||
-                (puzzle_game_ && puzzle_game_->IsVisible())) {
+                (puzzle_game_ && puzzle_game_->IsVisible()) ||
+                (clock_tool_ && clock_tool_->IsVisible())) {
                 return;
             }
 #endif
@@ -166,7 +173,8 @@ private:
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
                 (dot_game_ && dot_game_->IsVisible()) ||
-                (puzzle_game_ && puzzle_game_->IsVisible())) {
+                (puzzle_game_ && puzzle_game_->IsVisible()) ||
+                (clock_tool_ && clock_tool_->IsVisible())) {
                 return;
             }
 #endif
@@ -181,7 +189,8 @@ private:
             if ((animal_game_ && animal_game_->IsVisible()) ||
                 (transport_game_ && transport_game_->IsVisible()) ||
                 (dot_game_ && dot_game_->IsVisible()) ||
-                (puzzle_game_ && puzzle_game_->IsVisible())) {
+                (puzzle_game_ && puzzle_game_->IsVisible()) ||
+                (clock_tool_ && clock_tool_->IsVisible())) {
                 return;
             }
 #endif
@@ -288,12 +297,14 @@ private:
                 transport_game_ = new TransportTouchGame(display_);
                 dot_game_ = new DotTapGame(display_, &imu_);
                 puzzle_game_ = new PhotoPuzzleGame(display_);
+                clock_tool_ = new ClockTool(display_);
                 // Run after Application has initialized display, audio and callbacks.
                 Application::GetInstance().Schedule([this]() {
                     animal_game_->Initialize();
                     transport_game_->Initialize();
                     dot_game_->Initialize();
                     puzzle_game_->Initialize();
+                    clock_tool_->Initialize();
                 });
             }
 #else
